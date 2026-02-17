@@ -371,7 +371,7 @@ export default function Home() {
                 value={memberName}
                 onChange={(e) => setMemberName(e.target.value)}
                 className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-300"
-                placeholder="예: Tori"
+                placeholder="예: 최현철"
               />
             </label>
 

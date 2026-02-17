@@ -1,4 +1,17 @@
 import { NextResponse } from "next/server";
+
+export async function GET() {
+  return NextResponse.json({
+    MARK: "✅ ENV_CHECK_ACTIVE",
+    cwd: process.cwd(),
+    hasUrl: !!process.env.SUPABASE_URL,
+    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+}
+
+
+/* 임시 주석
+import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
@@ -50,3 +63,4 @@ export async function GET() {
     );
   }
 }
+*/

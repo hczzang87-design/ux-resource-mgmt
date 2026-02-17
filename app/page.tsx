@@ -60,7 +60,6 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function round1(n: number) {
-  // 0.1 단위 라운딩
   return Math.round(n * 10) / 10;
 }
 
@@ -71,6 +70,15 @@ function round2(n: number) {
 function sum(arr: number[]) {
   return arr.reduce((a, b) => a + b, 0);
 }
+
+type Grouped = {
+  key: string; // task||category
+  task_name: string;
+  category: string;
+  byDate: Record<string, { md: number; overtime_md: number }>; // date -> sum
+  mdTotal: number;
+  otTotal: number;
+};
 
 export default function Home() {
   const [memberName, setMemberName] = useState("Tori");
@@ -142,7 +150,6 @@ export default function Home() {
       prev.map((t, i) => {
         if (i !== idx) return t;
         const next = [...t.mdByDay] as DraftTask["mdByDay"];
-        // 0~1.0, 0.1 단위
         next[day] = round1(clamp(value, 0, 1.0));
         return { ...t, mdByDay: next };
       })
@@ -155,7 +162,7 @@ export default function Home() {
     for (const e of entries) {
       const idx = DAYS.findIndex((d) => dateForDay(d.idx) === e.date);
       if (idx >= 0) {
-        totals[idx] = round2(totals[idx] + Number(e.md || 0)); // 초과는 근무시간 제한에 포함할지 애매 → 여기서는 md만 제한 기준으로 봄
+        totals[idx] = round2(totals[idx] + Number(e.md || 0));
       }
     }
     return totals;
@@ -195,7 +202,6 @@ export default function Home() {
     if (!hasAnyDraft) return false;
     if (dayOverLimit.some(Boolean)) return false;
 
-    // 최소 검증: 업무명 있는 행은 md 합이 > 0 이어야 함
     for (const t of draft) {
       if (!t.task_name.trim()) continue;
       if (!(sum(t.mdByDay) > 0)) return false;
@@ -219,8 +225,6 @@ export default function Home() {
           const mdTotal = sum(t.mdByDay);
           const otTotal = Number(t.overtime_total || 0);
 
-          // 초과는 "업무 단위" → md 비율대로 분배(해당 업무가 있는 요일에만)
-          // (mdTotal이 0이면 여기 들어오지 않음)
           const rows: {
             date: string;
             category: string;
@@ -229,7 +233,6 @@ export default function Home() {
             overtime_md: number;
           }[] = [];
 
-          // 분배 오차를 줄이기 위해 마지막 날에 잔여를 몰아줌
           let otLeft = otTotal;
 
           const nonZeroDays = t.mdByDay
@@ -269,7 +272,6 @@ export default function Home() {
       const json = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(json?.error ?? `Failed to save (status ${res.status})`);
 
-      // 초기화
       setDraft([{ task_name: "", category: "", mdByDay: [0, 0, 0, 0, 0], overtime_total: 0 }]);
       await fetchEntries();
     } catch (e) {
@@ -295,11 +297,61 @@ export default function Home() {
     }
   }
 
-  const entriesSorted = useMemo(() => {
-    return [...entries].sort((a, b) => {
-      if (a.date === b.date) return b.created_at.localeCompare(a.created_at);
-      return a.date.localeCompare(b.date);
-    });
+  // ✅ 추가: 이번 주 전체 삭제
+  async function onDeleteAllThisWeek() {
+    const ok = confirm(`이번 주(${weekLabel}) 입력을 전부 삭제할까요? 되돌릴 수 없어요.`);
+    if (!ok) return;
+
+    setError(null);
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ member: memberName.trim(), from, to });
+      const res = await fetch(`/api/entries?${qs.toString()}`, { method: "DELETE" });
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(json?.error ?? `Failed to delete all (status ${res.status})`);
+      await fetchEntries();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ✅ 변경: "같은 업무" 묶어서 표시(업무명+카테고리 기준)
+  const groupedEntries = useMemo(() => {
+    const map = new Map<string, Grouped>();
+
+    for (const e of entries) {
+      const task = (e.task_name || "").trim();
+      const cat = (e.category || "").trim();
+      const key = `${task}||${cat}`;
+
+      const g =
+        map.get(key) ??
+        ({
+          key,
+          task_name: task,
+          category: cat,
+          byDate: {},
+          mdTotal: 0,
+          otTotal: 0,
+        } satisfies Grouped);
+
+      const prev = g.byDate[e.date] ?? { md: 0, overtime_md: 0 };
+      g.byDate[e.date] = {
+        md: round2(prev.md + Number(e.md || 0)),
+        overtime_md: round2(prev.overtime_md + Number(e.overtime_md || 0)),
+      };
+
+      g.mdTotal = round2(g.mdTotal + Number(e.md || 0));
+      g.otTotal = round2(g.otTotal + Number(e.overtime_md || 0));
+
+      map.set(key, g);
+    }
+
+    // 표시 순서: 총 md 큰 순 (원하면 task_name 알파벳순/날짜순으로 바꿔도 됨)
+    return [...map.values()].sort((a, b) => b.mdTotal - a.mdTotal);
   }, [entries]);
 
   return (
@@ -307,9 +359,7 @@ export default function Home() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold">주간 업무 입력</h1>
-          <p className="text-sm text-zinc-600">
-            0.1md = 1시간 · 하루 최대 1.0md(8시간 기준)
-          </p>
+          <p className="text-sm text-zinc-600">0.1md = 1시간 · 하루 최대 1.0md(8시간 기준)</p>
         </header>
 
         {/* 상단 설정 */}
@@ -427,7 +477,6 @@ export default function Home() {
                   const rowSum = round2(sum(t.mdByDay));
                   return (
                     <tr key={rowIdx} className="text-sm">
-                      {/* 업무명(고정) */}
                       <td className="sticky left-0 z-10 bg-white border-b border-zinc-100 p-2 align-top">
                         <input
                           value={t.task_name}
@@ -437,7 +486,6 @@ export default function Home() {
                         />
                       </td>
 
-                      {/* 월~금 */}
                       {DAYS.map((d) => (
                         <td key={d.idx} className="border-b border-zinc-100 p-2 text-center">
                           <input
@@ -475,13 +523,11 @@ export default function Home() {
                         </td>
                       ))}
 
-                      {/* 합계 */}
                       <td className="border-b border-zinc-100 p-2 text-center align-top">
                         <div className="mt-2 font-medium">{rowSum}</div>
                         <div className="text-xs text-zinc-500">m/d</div>
                       </td>
 
-                      {/* 초과(업무 단위) */}
                       <td className="border-b border-zinc-100 p-2 text-center align-top">
                         <input
                           type="number"
@@ -489,14 +535,15 @@ export default function Home() {
                           min="0"
                           value={t.overtime_total || 0}
                           onChange={(e) =>
-                            updateTask(rowIdx, { overtime_total: Math.max(0, Number(e.target.value)) })
+                            updateTask(rowIdx, {
+                              overtime_total: Math.max(0, Number(e.target.value)),
+                            })
                           }
                           className="w-24 rounded-xl border border-zinc-200 px-2 py-2 text-center outline-none focus:ring-2 focus:ring-zinc-300"
                           title="업무 단위 초과(제한 없음). 저장 시 해당 업무의 md 비율로 요일에 분배돼요."
                         />
                       </td>
 
-                      {/* 카테고리(옵션) */}
                       <td className="border-b border-zinc-100 p-2 text-center align-top">
                         <input
                           value={t.category}
@@ -507,7 +554,6 @@ export default function Home() {
                         <div className="mt-1 text-xs text-zinc-500">미입력 시 기타</div>
                       </td>
 
-                      {/* 삭제 */}
                       <td className="border-b border-zinc-100 p-2 text-center align-top">
                         <button
                           type="button"
@@ -535,20 +581,16 @@ export default function Home() {
               {saving ? "저장 중..." : "주간 저장"}
             </button>
             {!hasAnyDraft && (
-              <span className="text-sm text-zinc-600">
-                업무명 + 요일 md를 입력하면 저장할 수 있어요.
-              </span>
+              <span className="text-sm text-zinc-600">업무명 + 요일 md를 입력하면 저장할 수 있어요.</span>
             )}
           </div>
 
           {error && (
-            <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
+            <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
           )}
         </section>
 
-        {/* 이번 주 입력 목록 */}
+        {/* 이번 주 입력 목록 (✅ 묶음 표시 + ✅ 전체 삭제 버튼) */}
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -566,37 +608,55 @@ export default function Home() {
               >
                 새로고침
               </button>
+              <button
+                onClick={onDeleteAllThisWeek}
+                disabled={!memberName.trim() || loading || entries.length === 0}
+                className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                title={entries.length === 0 ? "삭제할 데이터가 없어요" : "이번 주 전체 삭제"}
+              >
+                이번 주 전체 삭제
+              </button>
             </div>
           </div>
 
-          {entriesSorted.length === 0 ? (
+          {groupedEntries.length === 0 ? (
             <div className="text-sm text-zinc-600">이번 주 데이터가 없어요.</div>
           ) : (
             <div className="space-y-2">
-              {entriesSorted.map((e) => (
-                <div key={e.id} className="rounded-xl border border-zinc-200 p-3 text-sm">
+              {groupedEntries.map((g) => (
+                <div key={g.key} className="rounded-xl border border-zinc-200 p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="min-w-[260px] flex-1 font-medium">{e.task_name}</div>
-                    <div className="flex items-center gap-2 text-zinc-600">
-                      <span>
-                        md {e.md} / 초과 {e.overtime_md}
-                      </span>
-                      <button
-                        onClick={() => onDeleteEntry(e.id)}
-                        className="rounded-lg border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50"
-                      >
-                        삭제
-                      </button>
+                    <div className="min-w-[260px] flex-1 font-medium">{g.task_name}</div>
+                    <div className="text-zinc-600">
+                      총 md {g.mdTotal} / 총 초과 {g.otTotal}
                     </div>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-zinc-600">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs">
-                      {e.date.slice(5)}
-                    </span>
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs">
-                      {e.category}
-                    </span>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {DAYS.map((d) => {
+                      const date = dateForDay(d.idx);
+                      const v = g.byDate[date];
+                      if (!v) return null;
+                      return (
+                        <span
+                          key={date}
+                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
+                        >
+                          {d.label}({date.slice(5)}) md {v.md} / 초과 {v.overtime_md}
+                        </span>
+                      );
+                    })}
                   </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-zinc-600">
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs">{g.category}</span>
+
+                    {/* 선택: 원하면 그룹 단위 삭제도 넣을 수 있는데,
+                        지금 요구사항은 "항목 전체 삭제(주간)"라서 여기서는 넣지 않았어.
+                        (그룹 삭제 원하면 말해줘) */}
+                  </div>
+
+                  {/* 단건 삭제는 "묶음" UI에선 애매해지니까: 필요하면 그룹 펼치기/상세 버튼으로 바꾸는 걸 추천 */}
                 </div>
               ))}
             </div>

@@ -2,6 +2,11 @@
 
 import type { EntryKey, TimeEntry } from "../types";
 import { makeKey } from "../lib/key";
+const CATEGORY_OPTIONS = [
+  "프로덕트 디자인",
+  "외부 리퀘스트",
+  "기타",
+];
 
 type Props = {
   memberName: string;
@@ -10,11 +15,11 @@ type Props = {
   onChangeMd: (key: EntryKey, md: number) => void;
   onChangeOt: (key: EntryKey, overtime_md: number) => void;
   onDelete: (key: EntryKey) => void;
-  onAddRow: (row: { category: string; task_name: string }) => void;
+  onAddRow: (row: { category?: string; task_name: string }) => void;
 };
 
 type Row = {
-  category: string;
+  category?: string;
   task_name: string;
 };
 
@@ -62,28 +67,54 @@ export function TimeEntryGrid({
       </div>
 
       {/* Add row */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
-          placeholder="카테고리 (예: 기획)"
-          style={{ padding: 8, border: "1px solid #e5e7eb", borderRadius: 8, width: 180 }}
-          onChange={(e) => (newCategory = e.target.value)}
-        />
-        <input
-          placeholder="업무명 (예: 리서치)"
-          style={{ padding: 8, border: "1px solid #e5e7eb", borderRadius: 8, width: 260 }}
-          onChange={(e) => (newTask = e.target.value)}
-        />
-        <button
-          onClick={() => {
-            const category = (newCategory || "").trim() || "기타";
-            const task_name = (newTask || "").trim();
-            if (!task_name) return;
-            onAddRow({ category, task_name });
-          }}
-        >
-          행 추가
-        </button>
-      </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 업무명 */}
+          <input
+            placeholder="업무명 (예: 리서치)"
+            style={{
+              padding: 8,
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              width: 260,
+            }}
+            onChange={(e) => (newTask = e.target.value)}
+          />
+
+          {/* ✅ 카테고리 드롭다운 */}
+          <select
+            defaultValue=""
+            style={{
+              padding: 8,
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              width: 180,
+              fontSize: 14,
+              background: "white",
+            }}
+            onChange={(e) => (newCategory = e.target.value)}
+          >
+            <option value="">카테고리 (선택)</option>
+            <option value="프로덕트 디자인">프로덕트 디자인</option>
+            <option value="외부 리퀘스트">외부 리퀘스트</option>
+            <option value="기타">기타</option>
+          </select>
+
+          <button
+            onClick={() => {
+              const category = (newCategory || "").trim() || undefined; // ✅ optional 유지
+              const task_name = (newTask || "").trim();
+              if (!task_name) return;
+
+              onAddRow({ category, task_name });
+
+              // 입력값 초기화 (UX 개선)
+              newTask = "";
+              newCategory = "";
+            }}
+          >
+            행 추가
+          </button>
+        </div>
 
       {/* Grid */}
       <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 12 }}>

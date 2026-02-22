@@ -3,7 +3,7 @@ export type TimeEntry = {
     created_at?: string;
     member_name: string;
     date: string; // YYYY-MM-DD
-    category: string;
+    category?: string;
     task_name: string;
     md: number;
     overtime_md: number;

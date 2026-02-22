@@ -18,24 +18,30 @@ function round1(n: number) {
 }
 
 export function useDraft(baseEntries: TimeEntry[]) {
+  // ✅ 서버에서 온 "저장된 데이터" 맵
   const baseMap = useMemo(() => {
     const m = new Map<EntryKey, TimeEntry>();
     for (const e of baseEntries) m.set(makeKey(e), e);
     return m;
   }, [baseEntries]);
 
+  // ✅ 드래프트 변경사항
   const [patches, setPatches] = useState<Map<EntryKey, DraftPatch>>(() => new Map());
 
+  // ✅ 저장된 데이터(패치 적용 전): 화면에 "고정 표시"할 때 사용
+  const savedEntries: TimeEntry[] = useMemo(() => {
+    return Array.from(baseMap.values());
+  }, [baseMap]);
+
+  // ✅ merged = saved + patches (입력/편집용)
   const merged: TimeEntry[] = useMemo(() => {
     const map = new Map(baseMap);
 
     for (const [key, p] of patches.entries()) {
-      if (p.kind === "delete") {
-        map.delete(key);
-      } else {
-        map.set(key, p.value);
-      }
+      if (p.kind === "delete") map.delete(key);
+      else map.set(key, p.value);
     }
+
     return Array.from(map.values());
   }, [baseMap, patches]);
 
@@ -51,12 +57,10 @@ export function useDraft(baseEntries: TimeEntry[]) {
     for (const [key, p] of patches.entries()) {
       const base = baseMap.get(key);
       if (p.kind === "delete") {
-        // 베이스에 없던 걸 delete한 경우는 무시
         if (base) deleted += 1;
       } else {
         if (!base) added += 1;
         else {
-          // 단순 비교
           const b = base;
           const v = p.value;
           const changed =
@@ -74,6 +78,7 @@ export function useDraft(baseEntries: TimeEntry[]) {
     return { dirty: patches.size > 0, added, edited, deleted };
   }, [patches, baseMap]);
 
+  // ✅ actions 안에서는 Hook 사용 금지!
   const actions = useMemo(() => {
     return {
       setMd: (key: EntryKey, md: number) => {
@@ -123,12 +128,8 @@ export function useDraft(baseEntries: TimeEntry[]) {
       deleteKey: (key: EntryKey) => {
         setPatches((prev) => {
           const m = new Map(prev);
-          // base에 없는 건 그냥 patch에서 제거
-          if (!baseMap.get(key)) {
-            m.delete(key);
-          } else {
-            m.set(key, { kind: "delete" });
-          }
+          if (!baseMap.get(key)) m.delete(key);
+          else m.set(key, { kind: "delete" });
           return m;
         });
       },
@@ -137,5 +138,11 @@ export function useDraft(baseEntries: TimeEntry[]) {
     };
   }, [baseMap]);
 
-  return { merged, validationErrors, draftStats, actions };
+  return {
+    savedEntries,
+    merged,
+    validationErrors,
+    draftStats,
+    actions,
+  };
 }

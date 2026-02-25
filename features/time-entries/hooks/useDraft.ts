@@ -5,6 +5,14 @@ import type { DraftStats, EntryKey, TimeEntry, ValidationError } from "../types"
 import { makeKey, parseKey } from "../lib/key";
 import { validateDailyLimit } from "../lib/validate";
 
+type UseDraftArg = TimeEntry[] | { baseEntries?: TimeEntry[] } | undefined | null;
+
+function normalizeBaseEntries(arg: UseDraftArg): TimeEntry[] {
+  if (Array.isArray(arg)) return arg;
+  if (arg && Array.isArray((arg as any).baseEntries)) return (arg as any).baseEntries;
+  return [];
+}
+
 type DraftPatch =
   | { kind: "upsert"; value: TimeEntry }
   | { kind: "delete" };
@@ -17,8 +25,10 @@ function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
-export function useDraft(baseEntries: TimeEntry[]) {
-  // ✅ 서버에서 온 "저장된 데이터" 맵
+export function useDraft(arg: UseDraftArg) {
+  const baseEntries = normalizeBaseEntries(arg);
+
+// ✅ 서버에서 온 "저장된 데이터" 맵
   const baseMap = useMemo(() => {
     const m = new Map<EntryKey, TimeEntry>();
     for (const e of baseEntries) m.set(makeKey(e), e);

@@ -1,4 +1,4 @@
-import MainWeekClient from "./MainWeekClient";
+import WeekPageClient from "./WeekPageClient";
 import type { TimeEntry } from "@/features/time-entries/types";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -22,12 +22,34 @@ function addDays(d: Date, n: number) {
   return x;
 }
 
-export default async function Page() {
-  const monday = startOfWeekMonday(new Date());
-  const friday = addDays(monday, 4);
+type PageProps = { searchParams?: Promise<{ from?: string; to?: string }> };
 
-  const from = toYMD(monday);
-  const to = toYMD(friday);
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams;
+  let monday: Date;
+  let from: string;
+  let to: string;
+
+  if (params?.from && params?.to) {
+    from = params.from;
+    to = params.to;
+    const [y, m, d] = from.split("-").map(Number);
+    monday = new Date(y, m - 1, d);
+  } else {
+    monday = startOfWeekMonday(new Date());
+    const friday = addDays(monday, 4);
+    from = toYMD(monday);
+    to = toYMD(friday);
+  }
+
+  const weekDates = [
+    from,
+    toYMD(addDays(monday, 1)),
+    toYMD(addDays(monday, 2)),
+    toYMD(addDays(monday, 3)),
+    to,
+  ];
+  const weekRangeLabel = `${from} ~ ${to}`;
 
   const supabase = supabaseServer();
 
@@ -42,11 +64,16 @@ export default async function Page() {
     .order("task_name", { ascending: true });
 
   if (error) {
-    // 서버 로그에서 바로 보이게
     console.error("Failed to load time_entries:", error);
   }
 
-  const baseEntries = (data ?? []) as TimeEntry[];
+  const savedEntries = (data ?? []) as TimeEntry[];
 
-  return <MainWeekClient baseEntries={baseEntries} />;
+  return (
+    <WeekPageClient
+      weekDates={weekDates}
+      weekRangeLabel={weekRangeLabel}
+      savedEntries={savedEntries}
+    />
+  );
 }

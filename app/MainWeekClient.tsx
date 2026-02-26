@@ -72,6 +72,41 @@ export default function MainWeekClient({
     );
   }, [merged, activeMember, weekDates]);
 
+  const summaryRows = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        task_name: string;
+        category?: string;
+        totalMd: number;
+        totalOt: number;
+      }
+    >();
+
+    for (const e of currentEntries) {
+      const key = `${e.task_name}|||${e.category ?? ""}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          task_name: e.task_name ?? "—",
+          category: e.category,
+          totalMd: 0,
+          totalOt: 0,
+        });
+      }
+
+      const row = map.get(key)!;
+      row.totalMd += Number(e.md ?? 0);
+      row.totalOt += Number(e.overtime_md ?? 0);
+    }
+
+    return Array.from(map.values()).map((r) => ({
+      ...r,
+      totalMd: Math.round(r.totalMd * 10) / 10,
+      totalOt: Math.round(r.totalOt * 10) / 10,
+    }));
+  }, [currentEntries]);
+
   // task+category별로 rows 구성 (총md/요일/ot 표시용)
   const rows = useMemo(() => {
     if (!activeMember) {
@@ -84,7 +119,6 @@ export default function MainWeekClient({
         ot: 0,
       }));
     }
-
     // 1) entries로부터 그룹 만들기
     const byRow = new Map<
       string,
@@ -360,41 +394,66 @@ export default function MainWeekClient({
               </div>
             )}
 
-            {/* 칩 선택 시 해당 멤버 저장 데이터 테이블 */}
-            {selectedMemberFromChip && currentEntries.length > 0 && (
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-semibold text-zinc-700">
-                  {selectedMemberFromChip} — 저장된 데이터
-                </h4>
-                <div className="overflow-x-auto rounded-lg border border-zinc-200">
-                  <table className="min-w-[400px] w-full border-collapse text-sm">
-                    <thead className="bg-zinc-50">
-                      <tr className="text-left text-xs text-zinc-600">
-                        <th className="px-3 py-2">업무</th>
-                        <th className="px-3 py-2">카테고리</th>
-                        <th className="px-3 py-2">날짜</th>
-                        <th className="px-3 py-2 w-16">md</th>
-                        <th className="px-3 py-2 w-16">OT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentEntries
-                        .slice()
-                        .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.task_name ?? "").localeCompare(b.task_name ?? ""))
-                        .map((e, i) => (
-                          <tr key={e.date + (e.task_name ?? "") + (e.category ?? "") + i} className="border-t border-zinc-100">
-                            <td className="px-3 py-2 font-medium text-zinc-900">{e.task_name ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-600">{e.category ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-600">{e.date ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-900">{Number(e.md ?? 0).toFixed(1)}</td>
-                            <td className="px-3 py-2 text-zinc-900">{Number(e.overtime_md ?? 0).toFixed(1)}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+{/* 칩 선택 시 해당 멤버 저장 데이터 요약 테이블 */}
+{selectedMemberFromChip && summaryRows.length > 0 && (
+  <div className="mt-4">
+    <h4 className="mb-2 text-sm font-semibold text-zinc-700">
+      {selectedMemberFromChip} — 저장된 데이터
+    </h4>
+
+    <div className="overflow-x-auto rounded-lg border border-zinc-200">
+      <table className="min-w-[400px] w-full border-collapse text-sm">
+        <thead className="bg-zinc-50">
+          <tr className="text-left text-xs text-zinc-600">
+            <th className="px-3 py-2">업무</th>
+            <th className="px-3 py-2">카테고리</th>
+            <th className="px-3 py-2 w-16">md</th>
+            <th className="px-3 py-2 w-16">OT</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {summaryRows.map((r, i) => (
+            <tr
+              key={r.task_name + (r.category ?? "") + i}
+              className="border-t border-zinc-100"
+            >
+              <td className="px-3 py-2 font-medium text-zinc-900">
+                {r.task_name}
+              </td>
+              <td className="px-3 py-2 text-zinc-600">
+                {r.category ?? "—"}
+              </td>
+              <td className="px-3 py-2 text-zinc-900">
+                {r.totalMd.toFixed(1)}
+              </td>
+              <td className="px-3 py-2 text-zinc-900">
+                {r.totalOt.toFixed(1)}
+              </td>
+            </tr>
+          ))}
+
+          {/* 합계 row */}
+          <tr className="border-t-2 border-zinc-300 bg-zinc-50 font-semibold">
+            <td className="px-3 py-2 text-zinc-800" colSpan={2}>
+              합계
+            </td>
+            <td className="px-3 py-2 text-zinc-900">
+              {summaryRows
+                .reduce((s, r) => s + r.totalMd, 0)
+                .toFixed(1)}
+            </td>
+            <td className="px-3 py-2 text-zinc-900">
+              {summaryRows
+                .reduce((s, r) => s + r.totalOt, 0)
+                .toFixed(1)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
           </div>
         </section>
       </div>

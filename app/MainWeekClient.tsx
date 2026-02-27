@@ -15,18 +15,26 @@ type Props = {
   onPrevWeek: () => void;
   onNextWeek: () => void;
 
-  // ✅ 서버에서 불러온 “이번 주” TimeEntry들 (멤버 전체일 수도 있음)
+  // 서버에서 불러온 “이번 주” TimeEntry들
   savedEntries: TimeEntry[];
 
-  // ✅ 저장 API 호출 (기존 app/page.tsx에서 내려주는 함수에 맞춰 연결)
+  // 저장 API 호출
   onSaveWeek: (memberName: string, entries: TimeEntry[]) => Promise<void>;
 
-  // 아래는 기존 UI 유지용(있으면 보여주고 없으면 무시)
+  // 기존 UI 유지용
   savedMembers?: SavedMember[];
   onDeleteAll?: () => void;
 };
 
 type RowSeed = { task_name: string; category?: string };
+
+// ✅ Refactoring: SummaryRow 타입을 컴포넌트 밖으로 분리
+type SummaryRow = {
+  task_name: string;
+  category?: string;
+  totalMd: number;
+  totalOt: number;
+};
 
 // rowId는 훅 key랑 분리(단순 row grouping key)
 function makeRowId(task_name: string, category?: string) {
@@ -55,11 +63,19 @@ export default function MainWeekClient({
   const [memberName, setMemberName] = useState("");
   const [selectedMemberFromChip, setSelectedMemberFromChip] = useState<string | null>(null);
 
-  const { merged, actions } = useDraft(savedEntries);
-  // “행 추가”로 만든 빈 행을 유지하기 위한 로컬 state
+  const { merged, actions, draftStats } = useDraft(savedEntries);
   const [rowSeeds, setRowSeeds] = useState<RowSeed[]>([]);
+  
+  // ✅ isSaving을 canSave보다 먼저 선언
+  const [isSaving, setIsSaving] = useState(false); 
 
-  // 칩으로 선택한 멤버의 entry만 화면에 사용 (멤버 필드 입력만으로는 불러오지 않음)
+  const hasMember = memberName.trim().length > 0;
+  const hasChanges = draftStats.dirty || rowSeeds.length > 0;
+  
+  // ✅ 저장 중이 아닐 때(!isSaving) 저장할 수 있도록 논리 수정
+  const canSave = hasMember && hasChanges && !isSaving;
+
+  // 칩으로 선택한 멤버의 entry만 화면에 사용
   const activeMember = selectedMemberFromChip || memberName.trim() || null;
   const currentEntries = useMemo(() => {
     if (!activeMember) return [] as TimeEntry[];
@@ -71,6 +87,33 @@ export default function MainWeekClient({
         typeof e.task_name === "string"
     );
   }, [merged, activeMember, weekDates]);
+
+  const summaryRows = useMemo<SummaryRow[]>(() => {
+    const map = new Map<string, SummaryRow>();
+
+    for (const e of currentEntries) {
+      const task = e.task_name ?? "—";
+      const cat = e.category ?? undefined;
+
+      // 같은 업무+카테고리는 합산
+      const key = `${task}|||${cat ?? ""}`;
+
+      if (!map.has(key)) {
+        map.set(key, { task_name: task, category: cat, totalMd: 0, totalOt: 0 });
+      }
+
+      const row = map.get(key)!;
+      row.totalMd += Number(e.md ?? 0);
+      row.totalOt += Number(e.overtime_md ?? 0);
+    }
+
+    // ✅ Refactoring: 중복 선언되어 있던 round1 함수 제거하고 외부 함수 사용
+    return Array.from(map.values()).map((r) => ({
+      ...r,
+      totalMd: round1(r.totalMd),
+      totalOt: round1(r.totalOt),
+    }));
+  }, [currentEntries]);
 
   // task+category별로 rows 구성 (총md/요일/ot 표시용)
   const rows = useMemo(() => {
@@ -114,8 +157,7 @@ export default function MainWeekClient({
         row.mdByDate[e.date] = round1((row.mdByDate[e.date] ?? 0) + (e.md ?? 0));
       }
 
-      // overtime 정책: 현재는 “월요일 entry에 모아 저장”이라고 했으니,
-      // 화면에는 row 단위로 합산해서 보여주되, 수정은 월요일 key에 setOvertime 적용
+      // overtime 정책: 현재는 “월요일 entry에 모아 저장”
       row.ot = round1(row.ot + (e.overtime_md ?? 0));
     }
 
@@ -136,7 +178,7 @@ export default function MainWeekClient({
     return Array.from(byRow.values());
   }, [currentEntries, rowSeeds, weekDates, activeMember]);
 
-  // ✅ 행 추가: 훅에 addRow가 없으므로 rowSeeds에만 추가
+  // 행 추가
   const handleAddRow = (row: { task_name: string; category?: string }) => {
     const task_name = row.task_name.trim();
     if (!task_name) return;
@@ -148,7 +190,7 @@ export default function MainWeekClient({
     });
   };
 
-  // 날짜별 MD 합계 1.0 제한 (해당 날짜 컬럼 세로 합이 1.0 초과 불가)
+  // 날짜별 MD 합계 1.0 제한
   const handleChangeCell = (rowId: string, date: string, nextMd: number) => {
     const name = memberName.trim();
     if (!name) return;
@@ -166,10 +208,13 @@ export default function MainWeekClient({
     const entriesForDate = merged.filter(
       (e) => e.member_name === name && e.date === date
     );
+    
+    // ✅ Bug Fix: Number(e.md ?? 0) 로 괄호 위치를 수정하여 NaN 오류 방지
     const currentSum = entriesForDate.reduce(
-      (sum, e) => sum + (Number(e.md) ?? 0),
+      (sum, e) => sum + Number(e.md ?? 0),
       0
     );
+    
     const normCat = cat || "기타";
     const currentCellEntry = merged.find(
       (e) =>
@@ -188,11 +233,13 @@ export default function MainWeekClient({
     actions.setMd(key, clamped);
   };
 
-  // ✅ overtime: setOvertime(key, overtime_md)
-  // 정책상 월요일(weekDates[0])에 저장한다고 했으니 그 key로만 변경 적용
+  // overtime 저장 로직
   const handleChangeOt = (rowId: string, nextOt: number) => {
     const name = memberName.trim();
     if (!name) return;
+    
+    // ✅ Safety: weekDates 배열이 비어있을 경우에 대한 방어 로직 추가
+    if (!weekDates.length) return;
 
     const monday = weekDates[0];
     const { task_name, category } = parseRowId(rowId);
@@ -219,12 +266,8 @@ export default function MainWeekClient({
     setRowSeeds((prev) => prev.filter((s) => makeRowId(s.task_name, s.category) !== rowId));
   };
 
-  const _handleReset = () => {
-    actions.resetDraft();
-    setRowSeeds([]); // “행 추가로 만든 빈 행”도 같이 초기화
-  };
+  // ✅ Refactoring: 데드 코드였던 _handleReset 함수 제거
 
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
     const name = memberName.trim();
@@ -232,7 +275,6 @@ export default function MainWeekClient({
 
     setIsSaving(true);
     try {
-      // merged는 draft 반영된 상태라고 가정
       const entriesToSave = merged.filter(
         (e) => e.member_name === name && e.date && weekDates.includes(e.date)
       );
@@ -258,7 +300,7 @@ export default function MainWeekClient({
                 주간은 월~일 기준이지만 입력은 워킹데이(월~금)만
               </p>
             </div>
-
+  
             <div className="flex items-center gap-3">
               <button
                 className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium hover:bg-zinc-50"
@@ -276,7 +318,7 @@ export default function MainWeekClient({
             </div>
           </div>
 
-          {/* Member input: 입력만으로는 저장된 데이터를 불러오지 않음. 아래 칩 클릭 시 로드 */}
+          {/* Member input */}
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-zinc-800">멤버</label>
             <input
@@ -297,12 +339,12 @@ export default function MainWeekClient({
             <div>
               <h2 className="text-lg font-bold text-zinc-900">주간 입력</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                멤버: <span className="font-medium text-zinc-800">{memberName || "—"}</span> · 월~금만 입력
+                멤버:{" "}
+                <span className="font-medium text-zinc-800">{memberName || "—"}</span> · 월~금만 입력
               </p>
             </div>
           </div>
 
-          {/* ✅ Draft 영역 제거 */}
           <TimeEntryGrid
             weekDates={weekDates}
             rows={rows}
@@ -312,10 +354,11 @@ export default function MainWeekClient({
             onDeleteRow={handleDeleteRow}
             onSave={handleSave}
             isSaving={isSaving}
+            canSave={canSave}
           />
         </section>
 
-        {/* Saved section (그대로 유지) */}
+        {/* Saved section */}
         <section className="mt-8">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -359,36 +402,35 @@ export default function MainWeekClient({
               </div>
             )}
 
-            {/* 칩 선택 시 해당 멤버 저장 데이터 테이블 */}
-            {selectedMemberFromChip && currentEntries.length > 0 && (
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-semibold text-zinc-700">
-                  {selectedMemberFromChip} — 저장된 데이터
+            {/* ✅ Feature: 업무 요약 테이블 UI 구현 */}
+            {summaryRows.length > 0 && activeMember && (
+              <div className="mt-6 border-t border-zinc-200 pt-4">
+                <h4 className="mb-3 text-sm font-bold text-zinc-800">
+                  {activeMember}님의 업무 요약
                 </h4>
-                <div className="overflow-x-auto rounded-lg border border-zinc-200">
-                  <table className="min-w-[400px] w-full border-collapse text-sm">
-                    <thead className="bg-zinc-50">
-                      <tr className="text-left text-xs text-zinc-600">
-                        <th className="px-3 py-2">업무</th>
-                        <th className="px-3 py-2">카테고리</th>
-                        <th className="px-3 py-2">날짜</th>
-                        <th className="px-3 py-2 w-16">md</th>
-                        <th className="px-3 py-2 w-16">OT</th>
+                <div className="overflow-hidden rounded-lg border border-zinc-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                      <tr>
+                        <th className="px-4 py-2 font-medium">업무명</th>
+                        <th className="px-4 py-2 font-medium">카테고리</th>
+                        <th className="px-4 py-2 text-right font-medium">MD 합계</th>
+                        <th className="px-4 py-2 text-right font-medium">OT 합계</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {currentEntries
-                        .slice()
-                        .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.task_name ?? "").localeCompare(b.task_name ?? ""))
-                        .map((e, i) => (
-                          <tr key={e.date + (e.task_name ?? "") + (e.category ?? "") + i} className="border-t border-zinc-100">
-                            <td className="px-3 py-2 font-medium text-zinc-900">{e.task_name ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-600">{e.category ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-600">{e.date ?? "—"}</td>
-                            <td className="px-3 py-2 text-zinc-900">{Number(e.md ?? 0).toFixed(1)}</td>
-                            <td className="px-3 py-2 text-zinc-900">{Number(e.overtime_md ?? 0).toFixed(1)}</td>
-                          </tr>
-                        ))}
+                    <tbody className="divide-y divide-zinc-200">
+                      {summaryRows.map((row) => (
+                        <tr key={`${row.task_name}|||${row.category}`}>
+                          <td className="px-4 py-2 text-zinc-900">{row.task_name}</td>
+                          <td className="px-4 py-2 text-zinc-500">{row.category || "—"}</td>
+                          <td className="px-4 py-2 text-right font-medium text-zinc-900">
+                            {row.totalMd}
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium text-zinc-900">
+                            {row.totalOt}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

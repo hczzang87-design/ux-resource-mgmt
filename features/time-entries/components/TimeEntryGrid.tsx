@@ -23,7 +23,9 @@ type Props = {
   onDeleteRow?: (rowId: string) => void;
   onSave: () => void;
 
+  canSave?: boolean;
   isSaving?: boolean;
+  
 };
 
 const CATEGORY_OPTIONS = [
@@ -45,6 +47,8 @@ export default function TimeEntryGrid({
   onDeleteRow,
   onSave,
   isSaving,
+  canSave
+  
 }: Props) {
   const [newTask, setNewTask] = useState("");
   const [newCategory, setNewCategory] = useState<string>("");
@@ -235,16 +239,18 @@ export default function TimeEntryGrid({
 
       {/* Actions (moved under '업무' section / table) */}
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-zinc-500">
-          * 날짜별 md 합계는 1.0 초과 불가. 초과(OT)는 제한 없음. overtime은 현재 “월요일 row에 모아 저장”으로 임시 처리 중(다음 단계에서 날짜 분배/별도 입력 개선 가능)
-        </p>
+        <div className="flex flex-col gap-1 text-xs text-zinc-500">
+          <p>* 날짜별 md 합계는 1.0 초과 불가.</p>
+          <p>* 초과(OT)는 제한 없음.</p>
+          <p>* overtime은 현재 “월요일 row에 모아 저장”으로 임시 처리 중(다음 단계에서 날짜 분배/별도 입력 개선 가능)</p>
+        </div>
 
         <div className="flex items-center gap-2">
-          <button
-            className="h-10 rounded-lg bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
-            onClick={onSave}
-            disabled={isSaving}
-          >
+        <button
+              className="h-10 rounded-lg bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
+              onClick={onSave}
+              disabled={isSaving || canSave === false}
+            >
             {isSaving ? "저장 중..." : "저장"}
           </button>
         </div>

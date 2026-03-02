@@ -61,8 +61,8 @@ export async function POST(req: Request) {
     const rows = (entries ?? []).map((e) => ({
       member_name: e.member_name,
       date: e.date,
-      category: (e.category || "기타").trim(),
-      task_name: (e.task_name || "").trim(),
+      category: (e.category || "기타").replace(/\s+/g, " ").trim(),
+      task_name: (e.task_name || "").replace(/\s+/g, " ").trim(),
       md: Number(e.md || 0),
       overtime_md: Number(e.overtime_md || 0),
     }));

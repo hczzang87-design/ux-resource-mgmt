@@ -1,3 +1,4 @@
+import Link from "next/link";
 import WeekPageClient from "./WeekPageClient";
 import type { TimeEntry } from "@/features/time-entries/types";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -51,6 +52,10 @@ export default async function Page({ searchParams }: PageProps) {
   ];
   const weekRangeLabel = `${from} ~ ${to}`;
 
+  // ✅ 월간 링크는 "이번 주의 from" 기준 월로 이동 (주간 탐색과 자연스럽게 연결)
+  const [fy, fm] = from.split("-").map(Number);
+  const monthHref = `/month?year=${fy}&month=${fm}`;
+
   const supabase = supabaseServer();
 
   const { data, error } = await supabase
@@ -70,10 +75,27 @@ export default async function Page({ searchParams }: PageProps) {
   const savedEntries = (data ?? []) as TimeEntry[];
 
   return (
-    <WeekPageClient
-      weekDates={weekDates}
-      weekRangeLabel={weekRangeLabel}
-      savedEntries={savedEntries}
-    />
+    <div className="mx-auto max-w-5xl p-6">
+      {/* Top bar */}
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <div className="text-lg font-semibold">주간 입력</div>
+          <div className="mt-1 text-sm text-zinc-600">{weekRangeLabel}</div>
+        </div>
+
+        <Link
+          href={monthHref}
+          className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50"
+        >
+          월간 내역 보기
+        </Link>
+      </div>
+
+      <WeekPageClient
+        weekDates={weekDates}
+        weekRangeLabel={weekRangeLabel}
+        savedEntries={savedEntries}
+      />
+    </div>
   );
 }

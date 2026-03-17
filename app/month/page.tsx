@@ -59,59 +59,61 @@ async function fetchMonth(year: number, month: number) {
 }
 
 export default async function MonthPage({
-    searchParams,
-  }: {
-    searchParams?: Promise<{ year?: string; month?: string }>;
-  }) {
-    const params = await searchParams;
-  
-    const def = getDefaultYearMonth();
-  
-    const yearRaw = Number(params?.year ?? 2026);
-    const monthRaw = Number(params?.month ?? def.month);
-  
-    const year = Number.isInteger(yearRaw) ? yearRaw : 2026;
-    const month =
-      Number.isInteger(monthRaw) && monthRaw >= 1 && monthRaw <= 12
-        ? monthRaw
-        : def.month;
-        function pad2(n: number) {
-            return String(n).padStart(2, "0");
-          }
-          function toYMD(d: Date) {
-            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-          }
-          function startOfWeekMonday(date: Date) {
-            const d = new Date(date);
-            const day = d.getDay(); // 0(일)~6(토)
-            const diff = day === 0 ? -6 : 1 - day;
-            d.setDate(d.getDate() + diff);
-            d.setHours(0, 0, 0, 0);
-            return d;
-          }
-          function addDays(d: Date, n: number) {
-            const x = new Date(d);
-            x.setDate(x.getDate() + n);
-            return x;
-          }
-          
-          // 선택 월의 "1일"을 기준으로 그 주의 월요일~금요일 계산
-          const firstDay = new Date(year, month - 1, 1);
-          const monday = startOfWeekMonday(firstDay);
-          const friday = addDays(monday, 4);
-          
-          const weekBackHref = `/?from=${toYMD(monday)}&to=${toYMD(friday)}`;
-  
-    const data = await fetchMonth(year, month);
-  
-    // ⬇️ 아래 렌더링 코드는 기존 그대로 두면 돼
+  searchParams,
+}: {
+  searchParams?: Promise<{ year?: string; month?: string }>;
+}) {
+  const params = await searchParams;
+
+  const def = getDefaultYearMonth();
+
+  const yearRaw = Number(params?.year ?? 2026);
+  const monthRaw = Number(params?.month ?? def.month);
+
+  const year = Number.isInteger(yearRaw) ? yearRaw : 2026;
+  const month =
+    Number.isInteger(monthRaw) && monthRaw >= 1 && monthRaw <= 12
+      ? monthRaw
+      : def.month;
+
+  function pad2(n: number) {
+    return String(n).padStart(2, "0");
+  }
+  function toYMD(d: Date) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+  function startOfWeekMonday(date: Date) {
+    const d = new Date(date);
+    const day = d.getDay(); // 0(일)~6(토)
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  function addDays(d: Date, n: number) {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  }
+
+  // 선택 월의 "1일"을 기준으로 그 주의 월요일~금요일 계산
+  const firstDay = new Date(year, month - 1, 1);
+  const monday = startOfWeekMonday(firstDay);
+  const friday = addDays(monday, 4);
+
+  const weekBackHref = `/?from=${toYMD(monday)}&to=${toYMD(friday)}`;
+
+  const data = await fetchMonth(year, month);
+
+  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
+
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="page-container">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
         <Link
           href={weekBackHref}
-          className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50"
+          className="ui-btn"
         >
           ← 주간 입력으로
         </Link>
@@ -120,12 +122,7 @@ export default async function MonthPage({
       </div>
 
       {/* Month selector (A안) */}
-      <div className="mb-6 rounded-xl border p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm text-zinc-600">연도</div>
-          <div className="font-medium">{year}</div>
-        </div>
-
+      <div className="ui-card ui-card-pad mb-6">
         <div className="text-sm text-zinc-600">월</div>
         <div className="mt-2 flex flex-wrap gap-2">
           {Array.from({ length: 12 }).map((_, i) => {
@@ -136,7 +133,7 @@ export default async function MonthPage({
                 key={m}
                 href={`/month?year=${year}&month=${m}`}
                 className={[
-                  "rounded-lg border px-3 py-2 text-sm",
+                  "ui-btn",
                   active
                     ? "bg-zinc-900 text-white border-zinc-900"
                     : "hover:bg-zinc-50",
@@ -155,19 +152,19 @@ export default async function MonthPage({
 
       {/* Summary */}
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border p-4">
-          <div className="text-sm text-zinc-600">총 md</div>
-          <div className="mt-1 text-2xl font-semibold">{data.totals.md}</div>
+        <div className="ui-card ui-card-pad">
+          <div className="text-sm text-zinc-600">총 MD</div>
+          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.md)}</div>
         </div>
-        <div className="rounded-xl border p-4">
+        <div className="ui-card ui-card-pad">
           <div className="text-sm text-zinc-600">총 OT</div>
-          <div className="mt-1 text-2xl font-semibold">{data.totals.ot}</div>
+          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.ot)}</div>
         </div>
       </div>
 
       {/* Members */}
       {data.members.length === 0 ? (
-        <div className="rounded-xl border p-10 text-center text-zinc-600">
+        <div className="ui-card p-10 text-center text-zinc-600">
           {monthLabel(year, month)}에 저장된 데이터가 없어요.
         </div>
       ) : (
@@ -175,44 +172,72 @@ export default async function MonthPage({
           {data.members.map((m) => (
   <details
     key={m.member_name}
-    className="rounded-xl border"
+    className="ui-card group"
     open
   >
-    <summary className="flex cursor-pointer list-none items-center justify-between p-4">
-      <div className="text-base font-semibold">{m.member_name}</div>
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 hover:bg-zinc-50">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="truncate text-base font-semibold">{m.member_name}</div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
+            <span className="text-zinc-500">MD</span>
+            <span className="font-semibold tabular-nums">{fmt1(m.totals.md)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
+            <span className="text-zinc-500">OT</span>
+            <span className="font-semibold tabular-nums">{fmt1(m.totals.ot)}</span>
+          </span>
+        </div>
+      </div>
 
       <div className="flex items-center gap-3 text-sm text-zinc-700">
-        <div>
-          md <span className="font-semibold">{m.totals.md}</span> · OT{" "}
-          <span className="font-semibold">{m.totals.ot}</span>
-        </div>
-
-        {/* caret */}
-        <span className="select-none text-zinc-400">▾</span>
+        <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+          <span className="hidden sm:inline">상세</span>
+          <svg
+            className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 8l4 4 4-4" />
+          </svg>
+        </span>
       </div>
     </summary>
 
     {/* divider */}
-    <div className="border-t" />
+    <div className="border-t border-zinc-100" />
 
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-50 text-zinc-600">
+      <div className="overflow-hidden">
+      <table className="ui-table table-fixed">
+        <colgroup>
+          <col />
+          <col className="w-[96px]" />
+          <col className="w-[96px]" />
+        </colgroup>
+        <thead className="ui-thead">
           <tr>
-            <th className="px-4 py-3 text-left">업무명</th>
-            <th className="px-4 py-3 text-right">md</th>
-            <th className="px-4 py-3 text-right">OT</th>
+            <th className="ui-th">업무명</th>
+            <th className="ui-th text-right">MD</th>
+            <th className="ui-th text-right">OT</th>
           </tr>
         </thead>
         <tbody>
           {m.tasks.map((t, idx) => (
             <tr
               key={`${t.category}||${t.task_name}||${idx}`}
-              className="border-t"
+              className="border-t border-zinc-100"
             >
-              <td className="px-4 py-3">
+              <td className="ui-td">
                 <div className="flex flex-col gap-1">
-                  <div className="font-medium">{t.task_name}</div>
+                  <div className="truncate font-medium" title={t.task_name}>
+                    {t.task_name}
+                  </div>
                   <div className="text-xs text-zinc-500">
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5">
                       {t.category}
@@ -220,12 +245,13 @@ export default async function MonthPage({
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-3 text-right tabular-nums">{t.md}</td>
-              <td className="px-4 py-3 text-right tabular-nums">{t.ot}</td>
+              <td className="ui-td text-right tabular-nums">{fmt1(t.md)}</td>
+              <td className="ui-td text-right tabular-nums">{fmt1(t.ot)}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   </details>
 ))}

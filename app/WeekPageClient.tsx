@@ -10,6 +10,7 @@ type SavedMember = { member_name: string; mdTotal: number; otTotal: number };
 type Props = {
   weekDates: string[];
   weekRangeLabel: string;
+  monthHref: string;
   savedEntries: TimeEntry[];
 };
 
@@ -20,6 +21,7 @@ function round1(n: number) {
 export default function WeekPageClient({
   weekDates,
   weekRangeLabel,
+  monthHref,
   savedEntries,
 }: Props) {
   const router = useRouter();
@@ -75,7 +77,6 @@ export default function WeekPageClient({
   };
 
   const onDeleteAll = async () => {
-    if (!confirm("이번 주 저장된 데이터를 모두 삭제할까요?")) return;
     const from = weekDates[0];
     const to = weekDates[weekDates.length - 1];
     const res = await fetch("/api/time-entries/week", {
@@ -91,6 +92,7 @@ export default function WeekPageClient({
     <MainWeekClient
       weekDates={weekDates}
       weekRangeLabel={weekRangeLabel}
+      monthHref={monthHref}
       onPrevWeek={onPrevWeek}
       onNextWeek={onNextWeek}
       savedEntries={savedEntries}

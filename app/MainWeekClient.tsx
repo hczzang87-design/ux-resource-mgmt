@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 
 import TimeEntryGrid from "../features/time-entries/components/TimeEntryGrid";
 import { useDraft } from "../features/time-entries/hooks/useDraft";
@@ -12,6 +13,7 @@ type SavedMember = { member_name: string; mdTotal: number; otTotal: number };
 type Props = {
   weekDates: string[]; // ["2026-02-23", ...] (월~금)
   weekRangeLabel: string; // "2026-02-23 ~ 2026-02-27"
+  monthHref: string;
   onPrevWeek: () => void;
   onNextWeek: () => void;
 
@@ -53,6 +55,7 @@ function round1(n: number) {
 export default function MainWeekClient({
   weekDates,
   weekRangeLabel,
+  monthHref,
   onPrevWeek,
   onNextWeek,
   savedEntries,
@@ -62,6 +65,9 @@ export default function MainWeekClient({
 }: Props) {
   const [memberName, setMemberName] = useState("");
   const [selectedMemberFromChip, setSelectedMemberFromChip] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success">("idle");
 
   const { merged, actions, draftStats } = useDraft(savedEntries);
   const [rowSeeds, setRowSeeds] = useState<RowSeed[]>([]);
@@ -114,6 +120,8 @@ export default function MainWeekClient({
       totalOt: round1(r.totalOt),
     }));
   }, [currentEntries]);
+
+  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
 
   // task+category별로 rows 구성 (총md/요일/ot 표시용)
   const rows = useMemo(() => {
@@ -274,6 +282,7 @@ export default function MainWeekClient({
     if (!name) return;
 
     setIsSaving(true);
+    setSaveStatus("saving");
     try {
       const entriesToSave = merged.filter(
         (e) => e.member_name === name && e.date && weekDates.includes(e.date)
@@ -281,55 +290,131 @@ export default function MainWeekClient({
       await onSaveWeek(name, entriesToSave);
       actions.resetDraft();
       setRowSeeds([]);
+      setSaveStatus("success");
+      window.setTimeout(() => setSaveStatus("idle"), 1200);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+    <div className="page-container">
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => (isDeletingAll ? null : setIsDeleteModalOpen(false))}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="전체 삭제 확인"
+            className="relative w-full max-w-md ui-card ui-card-pad shadow-lg"
+          >
+            <div className="text-base font-semibold text-zinc-900">
+              전체삭제 하시겠습니까?
+            </div>
+            <div className="mt-2 text-sm text-zinc-600">
+              이번주 저장된 멤버의 모든 업무 내역을 삭제하게 됩니다. 계속 하시겠어요?
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="ui-btn"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeletingAll}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="ui-btn ui-btn-danger disabled:opacity-60"
+                onClick={async () => {
+                  if (!onDeleteAll) return;
+                  setIsDeletingAll(true);
+                  try {
+                    await onDeleteAll();
+                    setIsDeleteModalOpen(false);
+                  } finally {
+                    setIsDeletingAll(false);
+                  }
+                }}
+                disabled={isDeletingAll}
+              >
+                {isDeletingAll ? "삭제 중..." : "확인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
         {/* Header */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-                리소스 매니지먼트
+                UX Resource Management
               </h1>
               <p className="mt-2 text-sm text-zinc-500">
                 주간은 월~일 기준이지만 입력은 워킹데이(월~금)만
               </p>
             </div>
-  
-            <div className="flex items-center gap-3">
-              <button
-                className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium hover:bg-zinc-50"
-                onClick={onPrevWeek}
-              >
-                ← 이전 주
-              </button>
-              <div className="text-sm font-medium text-zinc-800">{weekRangeLabel}</div>
-              <button
-                className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium hover:bg-zinc-50"
-                onClick={onNextWeek}
-              >
-                다음 주 →
-              </button>
+
+            <div className="shrink-0">
+              <Link href={monthHref} className="ui-btn ui-btn-primary">
+                월간 내역 보기
+              </Link>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+            <button className="ui-btn" onClick={onPrevWeek}>
+              ← 이전 주
+            </button>
+            <div className="text-sm font-medium text-zinc-800">{weekRangeLabel}</div>
+            <button className="ui-btn" onClick={onNextWeek}>
+              다음 주 →
+            </button>
           </div>
 
           {/* Member input */}
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-zinc-800">멤버</label>
-            <input
-              className="h-10 w-[220px] rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:border-zinc-400"
-              placeholder="예: 최현철"
-              value={memberName}
-              onChange={(e) => {
-                setMemberName(e.target.value);
-                setSelectedMemberFromChip(null);
-              }}
-            />
+            <div className="relative w-[220px]">
+              <input
+                className="h-10 w-full rounded-lg border border-zinc-200 bg-white pl-3 pr-9 text-sm outline-none focus:border-zinc-400"
+                placeholder="예: 최현철"
+                value={memberName}
+                onChange={(e) => {
+                  setMemberName(e.target.value);
+                  setSelectedMemberFromChip(null);
+                }}
+              />
+              {memberName.trim().length > 0 && (
+                <button
+                  type="button"
+                  aria-label="멤버 이름 초기화"
+                  className="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-400 text-white shadow-sm hover:bg-zinc-500"
+                  onClick={() => {
+                    setMemberName("");
+                    setSelectedMemberFromChip(null);
+                  }}
+                >
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 5l10 10M15 5L5 15" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -337,10 +422,35 @@ export default function MainWeekClient({
         <section className="mt-8">
           <div className="flex items-baseline justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-zinc-900">주간 입력</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-zinc-900">주간 입력</h2>
+                <div className="relative inline-flex items-center group">
+                  <button
+                    type="button"
+                    aria-label="주간 입력 도움말"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-300 bg-white text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    ?
+                  </button>
+                  <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 hidden w-[360px] rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 shadow-sm group-hover:block group-focus-within:block">
+                    <ul className="flex flex-col gap-1">
+                      <li className="flex gap-1">
+                        <span className="w-3 shrink-0 text-zinc-500">*</span>
+                        <span className="flex-1">
+                          날짜별 MD 합계는 1.0 초과 불가.
+                        </span>
+                      </li>
+                      <li className="flex gap-1">
+                        <span className="w-3 shrink-0 text-zinc-500">*</span>
+                        <span className="flex-1">초과(OT)는 제한 없음.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
               <p className="mt-1 text-sm text-zinc-500">
                 멤버:{" "}
-                <span className="font-medium text-zinc-800">{memberName || "—"}</span> · 월~금만 입력
+                <span className="font-medium text-zinc-800">{memberName || "—"}</span>
               </p>
             </div>
           </div>
@@ -355,6 +465,8 @@ export default function MainWeekClient({
             onSave={handleSave}
             isSaving={isSaving}
             canSave={canSave}
+            addRowDisabled={!hasMember}
+            saveStatus={saveStatus}
           />
         </section>
 
@@ -367,15 +479,15 @@ export default function MainWeekClient({
 
             {onDeleteAll && (
               <button
-                className="h-9 rounded-lg border border-red-300 bg-white px-3 text-sm font-medium text-red-600 hover:bg-red-50"
-                onClick={onDeleteAll}
+                className="ui-btn ui-btn-danger"
+                onClick={() => setIsDeleteModalOpen(true)}
               >
                 전체 삭제
               </button>
             )}
           </div>
 
-          <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="ui-card ui-card-pad mt-3">
             {savedMembers.length === 0 ? (
               <div className="text-sm text-zinc-500">저장된 멤버가 없습니다.</div>
             ) : (
@@ -395,8 +507,8 @@ export default function MainWeekClient({
                     }`}
                   >
                     <span className="font-medium text-zinc-900">{m.member_name}</span>
-                    <span className="text-zinc-500">MD {m.mdTotal}</span>
-                    <span className="text-zinc-500">OT {m.otTotal}</span>
+                    <span className="text-zinc-500">MD {Number(m.mdTotal ?? 0).toFixed(1)}</span>
+                    <span className="text-zinc-500">OT {Number(m.otTotal ?? 0).toFixed(1)}</span>
                   </button>
                 ))}
               </div>
@@ -424,10 +536,10 @@ export default function MainWeekClient({
                           <td className="px-4 py-2 text-zinc-900">{row.task_name}</td>
                           <td className="px-4 py-2 text-zinc-500">{row.category || "—"}</td>
                           <td className="px-4 py-2 text-right font-medium text-zinc-900">
-                            {row.totalMd}
+                            {fmt1(row.totalMd)}
                           </td>
                           <td className="px-4 py-2 text-right font-medium text-zinc-900">
-                            {row.totalOt}
+                            {fmt1(row.totalOt)}
                           </td>
                         </tr>
                       ))}
@@ -438,7 +550,6 @@ export default function MainWeekClient({
             )}
           </div>
         </section>
-      </div>
     </div>
   );
 }

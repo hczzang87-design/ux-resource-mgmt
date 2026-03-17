@@ -12,12 +12,12 @@ export function DraftPanel({
   errorsCount: number;
 }) {
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-      <div style={{ fontWeight: 800, marginBottom: 8 }}>Draft</div>
-      <div style={{ fontSize: 13, opacity: 0.8 }}>추가: {added}</div>
-      <div style={{ fontSize: 13, opacity: 0.8 }}>수정: {edited}</div>
-      <div style={{ fontSize: 13, opacity: 0.8 }}>삭제: {deleted}</div>
-      <div style={{ fontSize: 13, marginTop: 8, color: errorsCount ? "crimson" : "inherit" }}>
+    <div className="ui-card ui-card-pad">
+      <div className="mb-2 text-sm font-semibold text-zinc-900">Draft</div>
+      <div className="text-sm text-zinc-600">추가: {added}</div>
+      <div className="text-sm text-zinc-600">수정: {edited}</div>
+      <div className="text-sm text-zinc-600">삭제: {deleted}</div>
+      <div className={`mt-2 text-sm ${errorsCount ? "text-red-600" : "text-zinc-600"}`}>
         검증 에러: {errorsCount}
       </div>
     </div>

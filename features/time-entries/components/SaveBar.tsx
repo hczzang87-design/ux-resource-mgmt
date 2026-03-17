@@ -18,29 +18,24 @@ export function SaveBar({
   const disabled = saving || errors.length > 0 || !dirty;
 
   return (
-    <div
-      style={{
-        position: "sticky",
-        bottom: 0,
-        background: "white",
-        border: "1px solid #eee",
-        borderRadius: 12,
-        padding: 12,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 12,
-      }}
-    >
-      <div style={{ fontSize: 13, opacity: 0.8 }}>
-        {errors.length > 0 ? `저장 불가: 에러 ${errors.length}건` : dirty ? "변경사항 있음" : "변경사항 없음"}
+    <div className="sticky bottom-4 flex items-center justify-between gap-3 ui-card ui-card-pad">
+      <div className="text-sm text-zinc-600">
+        {errors.length > 0
+          ? `저장 불가: 에러 ${errors.length}건`
+          : dirty
+            ? "변경사항 있음"
+            : "변경사항 없음"}
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onReset} disabled={saving || !dirty}>
+      <div className="flex items-center gap-2">
+        <button className="ui-btn" onClick={onReset} disabled={saving || !dirty}>
           초기화
         </button>
-        <button onClick={onSave} disabled={disabled}>
+        <button
+          className="ui-btn ui-btn-primary disabled:opacity-60"
+          onClick={onSave}
+          disabled={disabled}
+        >
           {saving ? "저장 중..." : "저장"}
         </button>
       </div>

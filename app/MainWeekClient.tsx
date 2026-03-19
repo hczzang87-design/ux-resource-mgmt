@@ -3,6 +3,10 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import TimeEntryGrid from "../features/time-entries/components/TimeEntryGrid";
 import { useDraft } from "../features/time-entries/hooks/useDraft";
 import { makeKey } from "../features/time-entries/lib/key";
@@ -305,31 +309,30 @@ export default function MainWeekClient({
             className="absolute inset-0 bg-black/40"
             onClick={() => (isDeletingAll ? null : setIsDeleteModalOpen(false))}
           />
-          <div
+          <Card
             role="dialog"
             aria-modal="true"
             aria-label="전체 삭제 확인"
-            className="relative w-full max-w-md ui-card ui-card-pad shadow-lg"
+            className="relative w-full max-w-md p-4 shadow-lg"
           >
-            <div className="text-base font-semibold text-zinc-900">
-              전체삭제 하시겠습니까?
-            </div>
-            <div className="mt-2 text-sm text-zinc-600">
+            <CardHeader className="p-0">
+              <CardTitle className="text-base">전체삭제 하시겠습니까?</CardTitle>
+            </CardHeader>
+            <p className="mt-2 text-sm text-muted-foreground">
               이번주 저장된 멤버의 모든 업무 내역을 삭제하게 됩니다. 계속 하시겠어요?
-            </div>
-
+            </p>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button
+              <Button
                 type="button"
-                className="ui-btn"
+                variant="outline"
                 onClick={() => setIsDeleteModalOpen(false)}
                 disabled={isDeletingAll}
               >
                 취소
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="ui-btn ui-btn-danger disabled:opacity-60"
+                variant="destructive"
                 onClick={async () => {
                   if (!onDeleteAll) return;
                   setIsDeletingAll(true);
@@ -343,9 +346,9 @@ export default function MainWeekClient({
                 disabled={isDeletingAll}
               >
                 {isDeletingAll ? "삭제 중..." : "확인"}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -353,37 +356,35 @@ export default function MainWeekClient({
         <div className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
+              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
                 UX Resource Management
               </h1>
-              <p className="mt-2 text-sm text-zinc-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 주간은 월~일 기준이지만 입력은 워킹데이(월~금)만
               </p>
             </div>
 
-            <div className="shrink-0">
-              <Link href={monthHref} className="ui-btn ui-btn-primary">
-                월간 내역 보기
-              </Link>
-            </div>
+            <Button asChild size="default" className="shrink-0">
+              <Link href={monthHref}>월간 내역 보기</Link>
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-            <button className="ui-btn" onClick={onPrevWeek}>
+            <Button variant="outline" onClick={onPrevWeek}>
               ← 이전 주
-            </button>
-            <div className="text-sm font-medium text-zinc-800">{weekRangeLabel}</div>
-            <button className="ui-btn" onClick={onNextWeek}>
+            </Button>
+            <span className="text-sm font-medium text-foreground">{weekRangeLabel}</span>
+            <Button variant="outline" onClick={onNextWeek}>
               다음 주 →
-            </button>
+            </Button>
           </div>
 
-          {/* Member input */}
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-zinc-800">멤버</label>
+            <Label htmlFor="member-input">멤버</Label>
             <div className="relative w-[220px]">
-              <input
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white pl-3 pr-9 text-sm outline-none focus:border-zinc-400"
+              <Input
+                id="member-input"
+                className="h-10 pl-3 pr-9"
                 placeholder="예: 최현철"
                 value={memberName}
                 onChange={(e) => {
@@ -392,27 +393,21 @@ export default function MainWeekClient({
                 }}
               />
               {memberName.trim().length > 0 && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label="멤버 이름 초기화"
-                  className="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-400 text-white shadow-sm hover:bg-zinc-500"
+                  className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full"
                   onClick={() => {
                     setMemberName("");
                     setSelectedMemberFromChip(null);
                   }}
                 >
-                  <svg
-                    className="h-3 w-3"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                     <path d="M5 5l10 10M15 5L5 15" />
                   </svg>
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -420,41 +415,39 @@ export default function MainWeekClient({
 
         {/* Weekly input */}
         <section className="mt-8">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
+          <Card>
+            <CardHeader>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-zinc-900">주간 입력</h2>
+                <CardTitle className="text-lg">주간 입력</CardTitle>
                 <div className="relative inline-flex items-center group">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="icon-xs"
                     aria-label="주간 입력 도움말"
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-300 bg-white text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
+                    className="h-5 w-5 rounded-full text-[11px] font-bold"
                   >
                     ?
-                  </button>
-                  <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 hidden w-[360px] rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 shadow-sm group-hover:block group-focus-within:block">
+                  </Button>
+                  <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 hidden w-[360px] rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground shadow-sm group-hover:block group-focus-within:block">
                     <ul className="flex flex-col gap-1">
                       <li className="flex gap-1">
-                        <span className="w-3 shrink-0 text-zinc-500">*</span>
-                        <span className="flex-1">
-                          날짜별 MD 합계는 1.0 초과 불가.
-                        </span>
+                        <span className="w-3 shrink-0">*</span>
+                        <span className="flex-1">날짜별 MD 합계는 1.0 초과 불가.</span>
                       </li>
                       <li className="flex gap-1">
-                        <span className="w-3 shrink-0 text-zinc-500">*</span>
+                        <span className="w-3 shrink-0">*</span>
                         <span className="flex-1">초과(OT)는 제한 없음.</span>
                       </li>
                     </ul>
                   </div>
                 </div>
               </div>
-              <p className="mt-1 text-sm text-zinc-500">
-                멤버:{" "}
-                <span className="font-medium text-zinc-800">{memberName || "—"}</span>
+              <p className="mt-1 text-sm text-muted-foreground">
+                멤버: <span className="font-medium text-foreground">{memberName || "—"}</span>
               </p>
-            </div>
-          </div>
-
+            </CardHeader>
+            <CardContent className="pt-0">
           <TimeEntryGrid
             weekDates={weekDates}
             rows={rows}
@@ -468,61 +461,57 @@ export default function MainWeekClient({
             addRowDisabled={!hasMember}
             saveStatus={saveStatus}
           />
+            </CardContent>
+          </Card>
         </section>
 
         {/* Saved section */}
         <section className="mt-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-base font-bold text-zinc-900">이번 주 저장된 멤버</h3>
-            </div>
-
-            {onDeleteAll && (
-              <button
-                className="ui-btn ui-btn-danger"
-                onClick={() => setIsDeleteModalOpen(true)}
-              >
-                전체 삭제
-              </button>
-            )}
-          </div>
-
-          <div className="ui-card ui-card-pad mt-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <CardTitle className="text-base">이번 주 저장된 멤버</CardTitle>
+              {onDeleteAll && (
+                <Button variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
+                  전체 삭제
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
             {savedMembers.length === 0 ? (
-              <div className="text-sm text-zinc-500">저장된 멤버가 없습니다.</div>
+              <p className="text-sm text-muted-foreground">저장된 멤버가 없습니다.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {savedMembers.map((m) => (
-                  <button
+                  <Button
                     key={m.member_name}
                     type="button"
+                    variant={selectedMemberFromChip === m.member_name ? "secondary" : "outline"}
+                    className={
+                      selectedMemberFromChip === m.member_name
+                        ? "ring-2 ring-primary"
+                        : ""
+                    }
                     onClick={() => {
                       setSelectedMemberFromChip(m.member_name);
                       setMemberName(m.member_name);
                     }}
-                    className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
-                      selectedMemberFromChip === m.member_name
-                        ? "border-zinc-900 bg-zinc-100 ring-2 ring-zinc-400"
-                        : "border-zinc-200 bg-white hover:bg-zinc-50"
-                    }`}
                   >
-                    <span className="font-medium text-zinc-900">{m.member_name}</span>
-                    <span className="text-zinc-500">MD {Number(m.mdTotal ?? 0).toFixed(1)}</span>
-                    <span className="text-zinc-500">OT {Number(m.otTotal ?? 0).toFixed(1)}</span>
-                  </button>
+                    <span className="font-medium">{m.member_name}</span>
+                    <span className="text-muted-foreground"> MD {Number(m.mdTotal ?? 0).toFixed(1)}</span>
+                    <span className="text-muted-foreground"> OT {Number(m.otTotal ?? 0).toFixed(1)}</span>
+                  </Button>
                 ))}
               </div>
             )}
 
-            {/* ✅ Feature: 업무 요약 테이블 UI 구현 */}
             {summaryRows.length > 0 && activeMember && (
-              <div className="mt-6 border-t border-zinc-200 pt-4">
-                <h4 className="mb-3 text-sm font-bold text-zinc-800">
+              <div className="mt-6 border-t border-border pt-4">
+                <h4 className="mb-3 text-sm font-bold text-foreground">
                   {activeMember}님의 업무 요약
                 </h4>
-                <div className="overflow-hidden rounded-lg border border-zinc-200">
+                <div className="overflow-hidden rounded-lg border border-border">
                   <table className="w-full text-left text-sm">
-                    <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                    <thead className="border-b border-border bg-muted/50">
                       <tr>
                         <th className="px-4 py-2 font-medium">업무명</th>
                         <th className="px-4 py-2 font-medium">카테고리</th>
@@ -530,15 +519,15 @@ export default function MainWeekClient({
                         <th className="px-4 py-2 text-right font-medium">OT 합계</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-200">
+                    <tbody className="divide-y divide-border">
                       {summaryRows.map((row) => (
                         <tr key={`${row.task_name}|||${row.category}`}>
-                          <td className="px-4 py-2 text-zinc-900">{row.task_name}</td>
-                          <td className="px-4 py-2 text-zinc-500">{row.category || "—"}</td>
-                          <td className="px-4 py-2 text-right font-medium text-zinc-900">
+                          <td className="px-4 py-2 text-foreground">{row.task_name}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{row.category || "—"}</td>
+                          <td className="px-4 py-2 text-right font-medium text-foreground">
                             {fmt1(row.totalMd)}
                           </td>
-                          <td className="px-4 py-2 text-right font-medium text-zinc-900">
+                          <td className="px-4 py-2 text-right font-medium text-foreground">
                             {fmt1(row.totalOt)}
                           </td>
                         </tr>
@@ -548,7 +537,8 @@ export default function MainWeekClient({
                 </div>
               </div>
             )}
-          </div>
+            </CardContent>
+          </Card>
         </section>
     </div>
   );

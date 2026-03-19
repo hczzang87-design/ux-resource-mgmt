@@ -2,6 +2,23 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 type MonthSummaryResponse = {
   range: {
     year: number;
@@ -111,150 +128,136 @@ export default async function MonthPage({
     <div className="page-container">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
-        <Link
-          href={weekBackHref}
-          className="ui-btn"
-        >
-          ← 주간 입력으로
-        </Link>
-        <h1 className="text-lg font-semibold">월간 내역 보기</h1>
+        <Button asChild variant="outline">
+          <Link href={weekBackHref}>← 주간 입력으로</Link>
+        </Button>
+        <h1 className="text-lg font-semibold text-foreground">월간 내역 보기</h1>
         <div className="w-[110px]" />
       </div>
 
-      {/* Month selector (A안) */}
-      <div className="ui-card ui-card-pad mb-6">
-        <div className="text-sm text-zinc-600">월</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {Array.from({ length: 12 }).map((_, i) => {
-            const m = i + 1;
-            const active = m === month;
-            return (
-              <Link
-                key={m}
-                href={`/month?year=${year}&month=${m}`}
-                className={[
-                  "ui-btn",
-                  active
-                    ? "bg-zinc-900 text-white border-zinc-900"
-                    : "hover:bg-zinc-50",
-                ].join(" ")}
-              >
-                {m}월
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 text-xs text-zinc-500">
-          범위: {data.range.start} ~ {data.range.end} ({data.range.daysInMonth}일)
-        </div>
-      </div>
+      {/* Month selector */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm text-muted-foreground">월</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 12 }).map((_, i) => {
+              const m = i + 1;
+              const active = m === month;
+              return (
+                <Button key={m} variant={active ? "default" : "outline"} size="sm" asChild>
+                  <Link href={`/month?year=${year}&month=${m}`}>
+                    {m}월
+                  </Link>
+                </Button>
+              );
+            })}
+          </div>
+          <CardDescription className="mt-3 text-xs">
+            범위: {data.range.start} ~ {data.range.end} ({data.range.daysInMonth}일)
+          </CardDescription>
+        </CardContent>
+      </Card>
 
       {/* Summary */}
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <div className="ui-card ui-card-pad">
-          <div className="text-sm text-zinc-600">총 MD</div>
-          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.md)}</div>
-        </div>
-        <div className="ui-card ui-card-pad">
-          <div className="text-sm text-zinc-600">총 OT</div>
-          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.ot)}</div>
-        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">총 MD</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">{fmt1(data.totals.md)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">총 OT</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">{fmt1(data.totals.ot)}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Members */}
       {data.members.length === 0 ? (
-        <div className="ui-card p-10 text-center text-zinc-600">
-          {monthLabel(year, month)}에 저장된 데이터가 없어요.
-        </div>
+        <Card>
+          <CardContent className="p-10 text-center text-muted-foreground">
+            {monthLabel(year, month)}에 저장된 데이터가 없어요.
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
           {data.members.map((m) => (
-  <details
-    key={m.member_name}
-    className="ui-card group"
-    open
-  >
-    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 hover:bg-zinc-50">
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="truncate text-base font-semibold">{m.member_name}</div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
-            <span className="text-zinc-500">MD</span>
-            <span className="font-semibold tabular-nums">{fmt1(m.totals.md)}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
-            <span className="text-zinc-500">OT</span>
-            <span className="font-semibold tabular-nums">{fmt1(m.totals.ot)}</span>
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 text-sm text-zinc-700">
-        <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-          <span className="hidden sm:inline">상세</span>
-          <svg
-            className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M6 8l4 4 4-4" />
-          </svg>
-        </span>
-      </div>
-    </summary>
-
-    {/* divider */}
-    <div className="border-t border-zinc-100" />
-
-    <div className="overflow-x-auto">
-      <div className="overflow-hidden">
-      <table className="ui-table table-fixed">
-        <colgroup>
-          <col />
-          <col className="w-[96px]" />
-          <col className="w-[96px]" />
-        </colgroup>
-        <thead className="ui-thead">
-          <tr>
-            <th className="ui-th">업무명</th>
-            <th className="ui-th text-right">MD</th>
-            <th className="ui-th text-right">OT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {m.tasks.map((t, idx) => (
-            <tr
-              key={`${t.category}||${t.task_name}||${idx}`}
-              className="border-t border-zinc-100"
-            >
-              <td className="ui-td">
-                <div className="flex flex-col gap-1">
-                  <div className="truncate font-medium" title={t.task_name}>
-                    {t.task_name}
+            <Card key={m.member_name} className="group">
+              <details open>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-base font-semibold text-foreground">
+                      {m.member_name}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
+                        <span className="text-muted-foreground">MD</span>
+                        <span className="font-semibold tabular-nums">{fmt1(m.totals.md)}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
+                        <span className="text-muted-foreground">OT</span>
+                        <span className="font-semibold tabular-nums">{fmt1(m.totals.ot)}</span>
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-zinc-500">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5">
-                      {t.category}
-                    </span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                    <span className="hidden sm:inline">상세</span>
+                    <svg
+                      className="h-4 w-4 transition-transform group-open:rotate-180"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 8l4 4 4-4" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="border-t border-border">
+                  <Table className="table-fixed">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>업무명</TableHead>
+                        <TableHead className="w-[96px] text-right">MD</TableHead>
+                        <TableHead className="w-[96px] text-right">OT</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {m.tasks.map((t, idx) => (
+                        <TableRow key={`${t.category}||${t.task_name}||${idx}`}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <div className="truncate font-medium" title={t.task_name}>
+                                {t.task_name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="rounded-full bg-muted px-2 py-0.5">
+                                  {t.category}
+                                </span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{fmt1(t.md)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{fmt1(t.ot)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </td>
-              <td className="ui-td text-right tabular-nums">{fmt1(t.md)}</td>
-              <td className="ui-td text-right tabular-nums">{fmt1(t.ot)}</td>
-            </tr>
+              </details>
+            </Card>
           ))}
-        </tbody>
-      </table>
-      </div>
-    </div>
-  </details>
-))}
         </div>
       )}
     </div>

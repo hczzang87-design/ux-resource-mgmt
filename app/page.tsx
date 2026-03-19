@@ -51,27 +51,29 @@ export default async function Page({ searchParams }: PageProps) {
   ];
   const weekRangeLabel = `${from} ~ ${to}`;
 
-  // ✅ 월간 링크는 "이번 주의 from" 기준 월로 이동 (주간 탐색과 자연스럽게 연결)
   const [fy, fm] = from.split("-").map(Number);
   const monthHref = `/month?year=${fy}&month=${fm}`;
 
-  const supabase = supabaseServer();
+  let savedEntries: TimeEntry[] = [];
+  try {
+    const supabase = supabaseServer();
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("*")
+      .gte("date", from)
+      .lte("date", to)
+      .order("member_name", { ascending: true })
+      .order("date", { ascending: true })
+      .order("category", { ascending: true })
+      .order("task_name", { ascending: true });
 
-  const { data, error } = await supabase
-    .from("time_entries")
-    .select("*")
-    .gte("date", from)
-    .lte("date", to)
-    .order("member_name", { ascending: true })
-    .order("date", { ascending: true })
-    .order("category", { ascending: true })
-    .order("task_name", { ascending: true });
-
-  if (error) {
-    console.error("Failed to load time_entries:", error);
+    if (error) {
+      console.error("Failed to load time_entries:", error);
+    }
+    savedEntries = (data ?? []) as TimeEntry[];
+  } catch (e) {
+    console.error("Supabase init or fetch failed (check .env.local):", e);
   }
-
-  const savedEntries = (data ?? []) as TimeEntry[];
 
   return (
     <WeekPageClient

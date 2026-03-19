@@ -1,65 +1,86 @@
-import Image from "next/image";
+import WeekPageClient from "./WeekPageClient";
+import type { TimeEntry } from "@/features/time-entries/types";
+import { supabaseServer } from "@/lib/supabaseServer";
 
-export default function Home() {
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function startOfWeekMonday(today = new Date()) {
+  const d = new Date(today);
+  const day = d.getDay(); // 0(일)~6(토)
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+type PageProps = { searchParams?: Promise<{ from?: string; to?: string }> };
+
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams;
+  let monday: Date;
+  let from: string;
+  let to: string;
+
+  if (params?.from && params?.to) {
+    from = params.from;
+    to = params.to;
+    const [y, m, d] = from.split("-").map(Number);
+    monday = new Date(y, m - 1, d);
+  } else {
+    monday = startOfWeekMonday(new Date());
+    const friday = addDays(monday, 4);
+    from = toYMD(monday);
+    to = toYMD(friday);
+  }
+
+  const weekDates = [
+    from,
+    toYMD(addDays(monday, 1)),
+    toYMD(addDays(monday, 2)),
+    toYMD(addDays(monday, 3)),
+    to,
+  ];
+  const weekRangeLabel = `${from} ~ ${to}`;
+
+  const [fy, fm] = from.split("-").map(Number);
+  const monthHref = `/month?year=${fy}&month=${fm}`;
+
+  let savedEntries: TimeEntry[] = [];
+  try {
+    const supabase = supabaseServer();
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("*")
+      .gte("date", from)
+      .lte("date", to)
+      .order("member_name", { ascending: true })
+      .order("date", { ascending: true })
+      .order("category", { ascending: true })
+      .order("task_name", { ascending: true });
+
+    if (error) {
+      console.error("Failed to load time_entries:", error);
+    }
+    savedEntries = (data ?? []) as TimeEntry[];
+  } catch (e) {
+    console.error("Supabase init or fetch failed (check .env.local):", e);
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <WeekPageClient
+      weekDates={weekDates}
+      weekRangeLabel={weekRangeLabel}
+      monthHref={monthHref}
+      savedEntries={savedEntries}
+    />
   );
 }

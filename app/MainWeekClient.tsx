@@ -10,31 +10,25 @@ import { Label } from "@/components/ui/label";
 import TimeEntryGrid from "../features/time-entries/components/TimeEntryGrid";
 import { useDraft } from "../features/time-entries/hooks/useDraft";
 import { makeKey } from "../features/time-entries/lib/key";
+import { mdToHours, formatMd, formatHours } from "../features/time-entries/lib/hours";
 import type { TimeEntry } from "../features/time-entries/types";
 
 type SavedMember = { member_name: string; mdTotal: number; otTotal: number };
 
 type Props = {
-  weekDates: string[]; // ["2026-02-23", ...] (월~금)
-  weekRangeLabel: string; // "2026-02-23 ~ 2026-02-27"
+  weekDates: string[];
+  weekRangeLabel: string;
   monthHref: string;
   onPrevWeek: () => void;
   onNextWeek: () => void;
-
-  // 서버에서 불러온 “이번 주” TimeEntry들
   savedEntries: TimeEntry[];
-
-  // 저장 API 호출
   onSaveWeek: (memberName: string, entries: TimeEntry[]) => Promise<void>;
-
-  // 기존 UI 유지용
   savedMembers?: SavedMember[];
   onDeleteAll?: () => void;
 };
 
 type RowSeed = { task_name: string; category?: string };
 
-// ✅ Refactoring: SummaryRow 타입을 컴포넌트 밖으로 분리
 type SummaryRow = {
   task_name: string;
   category?: string;
@@ -42,7 +36,6 @@ type SummaryRow = {
   totalOt: number;
 };
 
-// rowId는 훅 key랑 분리(단순 row grouping key)
 function makeRowId(task_name: string, category?: string) {
   return `${task_name}|||${category ?? ""}`;
 }
@@ -53,6 +46,10 @@ function parseRowId(rowId: string): { task_name: string; category?: string } {
 }
 
 function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+function roundH(n: number) {
   return Math.round(n * 10) / 10;
 }
 
@@ -75,17 +72,12 @@ export default function MainWeekClient({
 
   const { merged, actions, draftStats } = useDraft(savedEntries);
   const [rowSeeds, setRowSeeds] = useState<RowSeed[]>([]);
-  
-  // ✅ isSaving을 canSave보다 먼저 선언
-  const [isSaving, setIsSaving] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false);
 
   const hasMember = memberName.trim().length > 0;
   const hasChanges = draftStats.dirty || rowSeeds.length > 0;
-  
-  // ✅ 저장 중이 아닐 때(!isSaving) 저장할 수 있도록 논리 수정
   const canSave = hasMember && hasChanges && !isSaving;
 
-  // 칩으로 선택한 멤버의 entry만 화면에 사용
   const activeMember = selectedMemberFromChip || memberName.trim() || null;
   const currentEntries = useMemo(() => {
     if (!activeMember) return [] as TimeEntry[];
@@ -104,8 +96,6 @@ export default function MainWeekClient({
     for (const e of currentEntries) {
       const task = e.task_name ?? "—";
       const cat = e.category ?? undefined;
-
-      // 같은 업무+카테고리는 합산
       const key = `${task}|||${cat ?? ""}`;
 
       if (!map.has(key)) {
@@ -117,7 +107,6 @@ export default function MainWeekClient({
       row.totalOt += Number(e.overtime_md ?? 0);
     }
 
-    // ✅ Refactoring: 중복 선언되어 있던 round1 함수 제거하고 외부 함수 사용
     return Array.from(map.values()).map((r) => ({
       ...r,
       totalMd: round1(r.totalMd),
@@ -125,12 +114,10 @@ export default function MainWeekClient({
     }));
   }, [currentEntries]);
 
-  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
+  const fmtH = (hours: number) => roundH(hours).toFixed(1);
 
-  // task+category별로 rows 구성 (총md/요일/ot 표시용)
   const rows = useMemo(() => {
     if (!activeMember) {
-      // 멤버 입력 전에도 “행 추가”한 rowSeeds는 보여주게
       return rowSeeds.map((s) => ({
         id: makeRowId(s.task_name, s.category),
         task_name: s.task_name,
@@ -139,7 +126,7 @@ export default function MainWeekClient({
         ot: 0,
       }));
     }
-    // 1) entries로부터 그룹 만들기
+
     const byRow = new Map<
       string,
       {
@@ -164,16 +151,13 @@ export default function MainWeekClient({
       }
       const row = byRow.get(rowId)!;
 
-      // md
       if (e.date && weekDates.includes(e.date)) {
         row.mdByDate[e.date] = round1((row.mdByDate[e.date] ?? 0) + (e.md ?? 0));
       }
 
-      // overtime 정책: 현재는 “월요일 entry에 모아 저장”
       row.ot = round1(row.ot + (e.overtime_md ?? 0));
     }
 
-    // 2) rowSeeds로 “빈 행”도 포함시키기
     for (const s of rowSeeds) {
       const rowId = makeRowId(s.task_name, s.category);
       if (!byRow.has(rowId)) {
@@ -190,7 +174,6 @@ export default function MainWeekClient({
     return Array.from(byRow.values());
   }, [currentEntries, rowSeeds, weekDates, activeMember]);
 
-  // 행 추가
   const handleAddRow = (row: { task_name: string; category?: string }) => {
     const task_name = row.task_name.trim();
     if (!task_name) return;
@@ -202,7 +185,6 @@ export default function MainWeekClient({
     });
   };
 
-  // 날짜별 MD 합계 1.0 제한
   const handleChangeCell = (rowId: string, date: string, nextMd: number) => {
     const name = memberName.trim();
     if (!name) return;
@@ -220,13 +202,12 @@ export default function MainWeekClient({
     const entriesForDate = merged.filter(
       (e) => e.member_name === name && e.date === date
     );
-    
-    // ✅ Bug Fix: Number(e.md ?? 0) 로 괄호 위치를 수정하여 NaN 오류 방지
+
     const currentSum = entriesForDate.reduce(
       (sum, e) => sum + Number(e.md ?? 0),
       0
     );
-    
+
     const normCat = cat || "기타";
     const currentCellEntry = merged.find(
       (e) =>
@@ -245,12 +226,9 @@ export default function MainWeekClient({
     actions.setMd(key, clamped);
   };
 
-  // overtime 저장 로직
   const handleChangeOt = (rowId: string, nextOt: number) => {
     const name = memberName.trim();
     if (!name) return;
-    
-    // ✅ Safety: weekDates 배열이 비어있을 경우에 대한 방어 로직 추가
     if (!weekDates.length) return;
 
     const monday = weekDates[0];
@@ -277,9 +255,6 @@ export default function MainWeekClient({
     }
     setRowSeeds((prev) => prev.filter((s) => makeRowId(s.task_name, s.category) !== rowId));
   };
-
-  // ✅ Refactoring: 데드 코드였던 _handleReset 함수 제거
-
 
   const handleSave = async () => {
     const name = memberName.trim();
@@ -360,7 +335,7 @@ export default function MainWeekClient({
                 UX Resource Management
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                주간은 월~일 기준이지만 입력은 워킹데이(월~금)만
+                시간(h) 기준 입력 · 8h = 1.0 m/d · 주간은 월~금 워킹데이
               </p>
             </div>
 
@@ -433,11 +408,11 @@ export default function MainWeekClient({
                     <ul className="flex flex-col gap-1">
                       <li className="flex gap-1">
                         <span className="w-3 shrink-0">*</span>
-                        <span className="flex-1">날짜별 MD 합계는 1.0 초과 불가.</span>
+                        <span className="flex-1">시간(h)으로 입력, 8h = 1.0 m/d 기준 자동 환산.</span>
                       </li>
                       <li className="flex gap-1">
                         <span className="w-3 shrink-0">*</span>
-                        <span className="flex-1">초과(OT)는 제한 없음.</span>
+                        <span className="flex-1">하루 최대 8h (= 1.0 m/d). 초과(OT)는 제한 없음.</span>
                       </li>
                     </ul>
                   </div>
@@ -481,7 +456,10 @@ export default function MainWeekClient({
               <p className="text-sm text-muted-foreground">저장된 멤버가 없습니다.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {savedMembers.map((m) => (
+                {savedMembers.map((m) => {
+                  const mdH = roundH(mdToHours(m.mdTotal));
+                  const otH = roundH(mdToHours(m.otTotal));
+                  return (
                   <Button
                     key={m.member_name}
                     type="button"
@@ -497,10 +475,11 @@ export default function MainWeekClient({
                     }}
                   >
                     <span className="font-medium">{m.member_name}</span>
-                    <span className="text-muted-foreground"> MD {Number(m.mdTotal ?? 0).toFixed(1)}</span>
-                    <span className="text-muted-foreground"> OT {Number(m.otTotal ?? 0).toFixed(1)}</span>
+                    <span className="text-muted-foreground"> {fmtH(mdH)}h ({formatMd(m.mdTotal)})</span>
+                    <span className="text-muted-foreground"> OT {fmtH(otH)}h</span>
                   </Button>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -515,23 +494,27 @@ export default function MainWeekClient({
                       <tr>
                         <th className="px-4 py-2 font-medium">업무명</th>
                         <th className="px-4 py-2 font-medium">카테고리</th>
-                        <th className="px-4 py-2 text-right font-medium">MD 합계</th>
-                        <th className="px-4 py-2 text-right font-medium">OT 합계</th>
+                        <th className="px-4 py-2 text-right font-medium">시간 (m/d)</th>
+                        <th className="px-4 py-2 text-right font-medium">OT 시간 (m/d)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {summaryRows.map((row) => (
+                      {summaryRows.map((row) => {
+                        const rH = roundH(mdToHours(row.totalMd));
+                        const oH = roundH(mdToHours(row.totalOt));
+                        return (
                         <tr key={`${row.task_name}|||${row.category}`}>
                           <td className="px-4 py-2 text-foreground">{row.task_name}</td>
                           <td className="px-4 py-2 text-muted-foreground">{row.category || "—"}</td>
                           <td className="px-4 py-2 text-right font-medium text-foreground">
-                            {fmt1(row.totalMd)}
+                            {fmtH(rH)}h <span className="text-xs text-muted-foreground">({formatMd(row.totalMd)})</span>
                           </td>
                           <td className="px-4 py-2 text-right font-medium text-foreground">
-                            {fmt1(row.totalOt)}
+                            {fmtH(oH)}h <span className="text-xs text-muted-foreground">({formatMd(row.totalOt)})</span>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

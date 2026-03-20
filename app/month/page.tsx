@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { mdToHours, formatMd } from "@/features/time-entries/lib/hours";
 
 type MonthSummaryResponse = {
   range: {
@@ -50,11 +51,9 @@ function monthLabel(year: number, month: number) {
 }
 
 async function getBaseUrlFromRequest() {
-  // 1) env 우선
   const envBase = process.env.NEXT_PUBLIC_BASE_URL;
   if (envBase) return envBase.replace(/\/+$/, "");
 
-  // 2) env 없으면 요청 헤더로 구성
   const h = await headers();
   const host = h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "http";
@@ -73,6 +72,14 @@ async function fetchMonth(year: number, month: number) {
     throw new Error(`Failed to load month summary: ${res.status} ${txt}`);
   }
   return (await res.json()) as MonthSummaryResponse;
+}
+
+function roundH(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+function fmtH(hours: number) {
+  return roundH(hours).toFixed(1);
 }
 
 export default async function MonthPage({
@@ -101,7 +108,7 @@ export default async function MonthPage({
   }
   function startOfWeekMonday(date: Date) {
     const d = new Date(date);
-    const day = d.getDay(); // 0(일)~6(토)
+    const day = d.getDay();
     const diff = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diff);
     d.setHours(0, 0, 0, 0);
@@ -113,7 +120,6 @@ export default async function MonthPage({
     return x;
   }
 
-  // 선택 월의 "1일"을 기준으로 그 주의 월요일~금요일 계산
   const firstDay = new Date(year, month - 1, 1);
   const monday = startOfWeekMonday(firstDay);
   const friday = addDays(monday, 4);
@@ -122,7 +128,8 @@ export default async function MonthPage({
 
   const data = await fetchMonth(year, month);
 
-  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
+  const totalHours = roundH(mdToHours(data.totals.md));
+  const totalOtHours = roundH(mdToHours(data.totals.ot));
 
   return (
     <div className="page-container">
@@ -164,18 +171,20 @@ export default async function MonthPage({
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">총 MD</CardTitle>
+            <CardTitle className="text-sm font-normal text-muted-foreground">총 시간 / MD</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold tabular-nums">{fmt1(data.totals.md)}</div>
+            <div className="text-2xl font-semibold tabular-nums">{fmtH(totalHours)}h</div>
+            <div className="mt-1 text-sm text-muted-foreground">{formatMd(data.totals.md)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">총 OT</CardTitle>
+            <CardTitle className="text-sm font-normal text-muted-foreground">총 OT 시간</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold tabular-nums">{fmt1(data.totals.ot)}</div>
+            <div className="text-2xl font-semibold tabular-nums">{fmtH(totalOtHours)}h</div>
+            <div className="mt-1 text-sm text-muted-foreground">{formatMd(data.totals.ot)}</div>
           </CardContent>
         </Card>
       </div>
@@ -189,7 +198,10 @@ export default async function MonthPage({
         </Card>
       ) : (
         <div className="space-y-4">
-          {data.members.map((m) => (
+          {data.members.map((m) => {
+            const mHours = roundH(mdToHours(m.totals.md));
+            const mOtHours = roundH(mdToHours(m.totals.ot));
+            return (
             <Card key={m.member_name} className="group">
               <details open>
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
@@ -199,12 +211,14 @@ export default async function MonthPage({
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
-                        <span className="text-muted-foreground">MD</span>
-                        <span className="font-semibold tabular-nums">{fmt1(m.totals.md)}</span>
+                        <span className="text-muted-foreground">시간</span>
+                        <span className="font-semibold tabular-nums">{fmtH(mHours)}h</span>
+                        <span className="text-muted-foreground text-[10px]">({formatMd(m.totals.md)})</span>
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
                         <span className="text-muted-foreground">OT</span>
-                        <span className="font-semibold tabular-nums">{fmt1(m.totals.ot)}</span>
+                        <span className="font-semibold tabular-nums">{fmtH(mOtHours)}h</span>
+                        <span className="text-muted-foreground text-[10px]">({formatMd(m.totals.ot)})</span>
                       </span>
                     </div>
                   </div>
@@ -229,12 +243,15 @@ export default async function MonthPage({
                     <TableHeader>
                       <TableRow>
                         <TableHead>업무명</TableHead>
-                        <TableHead className="w-[96px] text-right">MD</TableHead>
-                        <TableHead className="w-[96px] text-right">OT</TableHead>
+                        <TableHead className="w-[140px] text-right">시간 (m/d)</TableHead>
+                        <TableHead className="w-[140px] text-right">OT 시간 (m/d)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {m.tasks.map((t, idx) => (
+                      {m.tasks.map((t, idx) => {
+                        const tH = roundH(mdToHours(t.md));
+                        const tOtH = roundH(mdToHours(t.ot));
+                        return (
                         <TableRow key={`${t.category}||${t.task_name}||${idx}`}>
                           <TableCell>
                             <div className="flex flex-col gap-1">
@@ -248,16 +265,24 @@ export default async function MonthPage({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{fmt1(t.md)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{fmt1(t.ot)}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="font-medium">{fmtH(tH)}h</span>
+                            <span className="ml-1 text-xs text-muted-foreground">({formatMd(t.md)})</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="font-medium">{fmtH(tOtH)}h</span>
+                            <span className="ml-1 text-xs text-muted-foreground">({formatMd(t.ot)})</span>
+                          </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
               </details>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

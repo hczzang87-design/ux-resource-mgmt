@@ -14,33 +14,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  mdToHours,
+  hoursToMd,
+  formatMd,
+  HOURS_STEP,
+  MAX_DAILY_HOURS,
+} from "../lib/hours";
 
 type Row = {
   id: string;
   task_name: string;
   category?: string;
-  // date(YYYY-MM-DD) => md
   mdByDate: Record<string, number>;
   ot: number;
 };
 
 type Props = {
-  weekDates: string[]; // ["2026-02-23", ...]
+  weekDates: string[];
   rows: Row[];
-
   onChangeCell: (rowId: string, date: string, nextMd: number) => void;
   onChangeOt: (rowId: string, nextOt: number) => void;
-
   onAddRow: (row: { task_name: string; category?: string }) => void;
-
   onDeleteRow?: (rowId: string) => void;
   onSave: () => void;
-
   canSave?: boolean;
   isSaving?: boolean;
   addRowDisabled?: boolean;
   saveStatus?: "idle" | "saving" | "success";
-  
 };
 
 const CATEGORY_OPTIONS = [
@@ -49,7 +50,7 @@ const CATEGORY_OPTIONS = [
   { label: "기타", value: "기타" },
 ];
 
-function round1(n: number) {
+function roundH(n: number) {
   return Math.round(n * 10) / 10;
 }
 
@@ -64,8 +65,7 @@ export default function TimeEntryGrid({
   isSaving,
   canSave = false,
   addRowDisabled,
-  saveStatus = "idle"
-  
+  saveStatus = "idle",
 }: Props) {
   const [newTask, setNewTask] = useState("");
   const [newCategory, setNewCategory] = useState<string>("");
@@ -89,31 +89,39 @@ export default function TimeEntryGrid({
     [weekDates]
   );
 
-  const rowTotals = useMemo(() => {
+  const rowTotalsHours = useMemo(() => {
     return rows.reduce<Record<string, number>>((acc, r) => {
-      const total = weekDates.reduce((sum, d) => sum + (r.mdByDate[d] ?? 0), 0);
-      acc[r.id] = round1(total);
+      const totalMd = weekDates.reduce((sum, d) => sum + (r.mdByDate[d] ?? 0), 0);
+      acc[r.id] = roundH(mdToHours(totalMd));
       return acc;
     }, {});
   }, [rows, weekDates]);
 
-  const dateTotals = useMemo(() => {
+  const rowTotalsMd = useMemo(() => {
+    return rows.reduce<Record<string, number>>((acc, r) => {
+      const totalMd = weekDates.reduce((sum, d) => sum + (r.mdByDate[d] ?? 0), 0);
+      acc[r.id] = Math.round(totalMd * 100) / 100;
+      return acc;
+    }, {});
+  }, [rows, weekDates]);
+
+  const dateTotalsMd = useMemo(() => {
     return weekDates.reduce<Record<string, number>>((acc, d) => {
-      acc[d] = round1(rows.reduce((sum, r) => sum + (r.mdByDate[d] ?? 0), 0));
+      acc[d] = rows.reduce((sum, r) => sum + (r.mdByDate[d] ?? 0), 0);
       return acc;
     }, {});
   }, [rows, weekDates]);
 
   const cellKey = (rowId: string, date: string) => `${rowId}||${date}`;
-  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
+  const fmtH = (hours: number) => roundH(hours).toFixed(1);
 
-  const maxAllowedForCell = (rowId: string, date: string, currentValue: number) => {
-    const totalForDate = dateTotals[date] ?? 0;
-    const remaining = 1.0 - (totalForDate - Number(currentValue ?? 0));
-    return round1(Math.max(0, remaining));
+  const maxAllowedHoursForCell = (rowId: string, date: string, currentMd: number) => {
+    const totalMdForDate = dateTotalsMd[date] ?? 0;
+    const remainingMd = 1.0 - (totalMdForDate - currentMd);
+    return roundH(mdToHours(Math.max(0, remainingMd)));
   };
 
-  const parseMd = (s: string) => {
+  const parseHoursInput = (s: string) => {
     const cleaned = s.replace(/[^\d.]/g, "");
     if (!cleaned) return null;
     const n = Number(cleaned);
@@ -178,16 +186,29 @@ export default function TimeEntryGrid({
               <TableHead className="w-[48px] px-2 py-3"></TableHead>
               <TableHead className="w-[192px] whitespace-nowrap px-4 py-3">업무</TableHead>
               <TableHead className="w-[128px] whitespace-nowrap px-4 py-3">카테고리</TableHead>
-              <TableHead className="w-[90px] px-4 py-3">총 md</TableHead>
+              <TableHead className="w-[110px] px-4 py-3">
+                <div className="flex flex-col leading-tight">
+                  <span>총 시간</span>
+                  <span className="text-[10px] text-muted-foreground">h / m/d</span>
+                </div>
+              </TableHead>
               {headerDates.map((d) => (
                 <TableHead
                   key={d.iso}
-                  className="w-[100px] min-w-[100px] px-2 py-3 text-center whitespace-nowrap text-xs"
+                  className="w-[110px] min-w-[110px] px-2 py-3 text-center whitespace-nowrap text-xs"
                 >
-                  {d.mmdd} ({d.dow})
+                  <div className="flex flex-col leading-tight">
+                    <span>{d.mmdd} ({d.dow})</span>
+                    <span className="text-[10px] text-muted-foreground">시간(h)</span>
+                  </div>
                 </TableHead>
               ))}
-              <TableHead className="w-[110px] px-4 py-3">초과 근무 (OT)</TableHead>
+              <TableHead className="w-[120px] px-4 py-3">
+                <div className="flex flex-col leading-tight">
+                  <span>초과 근무</span>
+                  <span className="text-[10px] text-muted-foreground">OT(h)</span>
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -199,7 +220,8 @@ export default function TimeEntryGrid({
               </TableRow>
             ) : (
               rows.map((r) => {
-                const total = rowTotals[r.id] ?? 0;
+                const totalH = rowTotalsHours[r.id] ?? 0;
+                const totalMd = rowTotalsMd[r.id] ?? 0;
 
                 return (
                   <TableRow key={r.id}>
@@ -236,17 +258,18 @@ export default function TimeEntryGrid({
 
                     <TableCell className="px-4 py-3 text-sm">
                       <div className="flex flex-col leading-tight">
-                        <span className="font-semibold">{total.toFixed(1)}</span>
-                        <span className="text-[10px] text-muted-foreground">md</span>
+                        <span className="font-semibold">{fmtH(totalH)}h</span>
+                        <span className="text-[10px] text-muted-foreground">{formatMd(totalMd)}</span>
                       </div>
                     </TableCell>
 
                     {weekDates.map((d) => {
-                      const v = r.mdByDate[d] ?? 0;
+                      const md = r.mdByDate[d] ?? 0;
+                      const hours = roundH(mdToHours(md));
                       const k = cellKey(r.id, d);
                       const draft = cellDrafts[k];
-                      const shown = typeof draft === "string" ? draft : fmt1(v);
-                      const maxAllowed = maxAllowedForCell(r.id, d, v);
+                      const shown = typeof draft === "string" ? draft : fmtH(hours);
+                      const maxH = maxAllowedHoursForCell(r.id, d, md);
                       const isError = cellErrors[k] === true;
 
                       return (
@@ -262,8 +285,11 @@ export default function TimeEntryGrid({
                               variant="ghost"
                               size="icon-xs"
                               className="h-8 w-7 shrink-0"
-                              title="0.1 감소"
-                              onClick={() => onChangeCell(r.id, d, Math.max(0, round1(v - 0.1)))}
+                              title={`${HOURS_STEP}h 감소`}
+                              onClick={() => {
+                                const nextH = roundH(Math.max(0, hours - HOURS_STEP));
+                                onChangeCell(r.id, d, hoursToMd(nextH));
+                              }}
                             >
                               −
                             </Button>
@@ -273,30 +299,29 @@ export default function TimeEntryGrid({
                               value={shown}
                               title={
                                 isError
-                                  ? `하루 합계는 1.0을 초과할 수 없어요. (최대 입력 가능: ${fmt1(maxAllowed)})`
-                                  : "0.0 ~ 1.0 직접 입력 가능"
+                                  ? `하루 합계는 ${MAX_DAILY_HOURS}h를 초과할 수 없어요 (최대: ${fmtH(maxH)}h)`
+                                  : `0 ~ ${MAX_DAILY_HOURS}h 입력`
                               }
                               onChange={(e) => {
                                 const next = e.target.value;
                                 setCellDrafts((prev) => ({ ...prev, [k]: next }));
 
-                                const n = parseMd(next);
+                                const n = parseHoursInput(next);
                                 if (n === null) {
                                   setCellErrors((prev) => ({ ...prev, [k]: false }));
                                   return;
                                 }
 
-                                const nextRounded = round1(n);
+                                const nextRoundedH = roundH(n);
                                 const nextError =
-                                  nextRounded < 0 || nextRounded > maxAllowed + 1e-9 || nextRounded > 1.0 + 1e-9;
+                                  nextRoundedH < 0 || nextRoundedH > maxH + 0.01 || nextRoundedH > MAX_DAILY_HOURS + 0.01;
                                 setCellErrors((prev) => ({ ...prev, [k]: nextError }));
 
                                 if (!nextError) {
-                                  onChangeCell(r.id, d, nextRounded);
+                                  onChangeCell(r.id, d, hoursToMd(nextRoundedH));
                                 }
                               }}
                               onBlur={() => {
-                                // 입력값이 유효하지 않으면, 현재 값으로 되돌림
                                 setCellDrafts((prev) => {
                                   const m = { ...prev };
                                   delete m[k];
@@ -314,84 +339,107 @@ export default function TimeEntryGrid({
                               variant="ghost"
                               size="icon-xs"
                               className="h-8 w-7 shrink-0"
-                              title="0.1 증가"
-                              onClick={() => onChangeCell(r.id, d, round1(v + 0.1))}
+                              title={`${HOURS_STEP}h 증가`}
+                              onClick={() => {
+                                const nextH = roundH(hours + HOURS_STEP);
+                                onChangeCell(r.id, d, hoursToMd(nextH));
+                              }}
                             >
                               +
                             </Button>
                           </div>
+                          {md > 0 && (
+                            <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                              {formatMd(md)}
+                            </div>
+                          )}
                         </TableCell>
                       );
                     })}
 
                     <TableCell className="px-4 py-3">
                       {(() => {
+                        const otMd = r.ot;
+                        const otH = roundH(mdToHours(otMd));
                         const k = r.id;
                         const draft = otDrafts[k];
-                        const shown = typeof draft === "string" ? draft : fmt1(r.ot);
+                        const shown = typeof draft === "string" ? draft : fmtH(otH);
                         const isError = otErrors[k] === true;
 
                         return (
+                          <>
                           <div
                             className={
                               "flex min-w-[100px] items-center gap-0.5 rounded-lg border bg-background " +
                               (isError ? "border-destructive" : "border-input")
                             }
                           >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="h-8 w-7 shrink-0"
-                          title="0.1 감소"
-                          onClick={() => onChangeOt(r.id, Math.max(0, round1(r.ot - 0.1)))}
-                        >
-                          −
-                        </Button>
-                        <Input
-                          inputMode="decimal"
-                          className="h-8 min-w-11 flex-1 border-0 bg-transparent px-1 py-0 text-center text-sm font-medium shadow-none focus-visible:ring-0"
-                          value={shown}
-                          title={isError ? "초과(OT)는 0 이상이어야 해요." : "초과(OT) 직접 입력 가능"}
-                          onChange={(e) => {
-                            const next = e.target.value;
-                            setOtDrafts((prev) => ({ ...prev, [k]: next }));
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-8 w-7 shrink-0"
+                              title={`${HOURS_STEP}h 감소`}
+                              onClick={() => {
+                                const nextH = roundH(Math.max(0, otH - HOURS_STEP));
+                                onChangeOt(r.id, hoursToMd(nextH));
+                              }}
+                            >
+                              −
+                            </Button>
+                            <Input
+                              inputMode="decimal"
+                              className="h-8 min-w-11 flex-1 border-0 bg-transparent px-1 py-0 text-center text-sm font-medium shadow-none focus-visible:ring-0"
+                              value={shown}
+                              title={isError ? "OT는 0 이상이어야 해요." : "초과(OT) 시간 입력"}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setOtDrafts((prev) => ({ ...prev, [k]: next }));
 
-                            const n = parseMd(next);
-                            if (n === null) {
-                              setOtErrors((prev) => ({ ...prev, [k]: false }));
-                              return;
-                            }
+                                const n = parseHoursInput(next);
+                                if (n === null) {
+                                  setOtErrors((prev) => ({ ...prev, [k]: false }));
+                                  return;
+                                }
 
-                            const nextRounded = round1(n);
-                            const nextError = nextRounded < 0;
-                            setOtErrors((prev) => ({ ...prev, [k]: nextError }));
-                            if (!nextError) onChangeOt(r.id, nextRounded);
-                          }}
-                          onBlur={() => {
-                            setOtDrafts((prev) => {
-                              const m = { ...prev };
-                              delete m[k];
-                              return m;
-                            });
-                            setOtErrors((prev) => ({ ...prev, [k]: false }));
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-                            if (e.key === "Escape") (e.currentTarget as HTMLInputElement).blur();
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="h-8 w-7 shrink-0"
-                          title="0.1 증가"
-                          onClick={() => onChangeOt(r.id, round1(r.ot + 0.1))}
-                        >
-                          +
-                        </Button>
-                      </div>
+                                const nextRoundedH = roundH(n);
+                                const nextError = nextRoundedH < 0;
+                                setOtErrors((prev) => ({ ...prev, [k]: nextError }));
+                                if (!nextError) onChangeOt(r.id, hoursToMd(nextRoundedH));
+                              }}
+                              onBlur={() => {
+                                setOtDrafts((prev) => {
+                                  const m = { ...prev };
+                                  delete m[k];
+                                  return m;
+                                });
+                                setOtErrors((prev) => ({ ...prev, [k]: false }));
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+                                if (e.key === "Escape") (e.currentTarget as HTMLInputElement).blur();
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-8 w-7 shrink-0"
+                              title={`${HOURS_STEP}h 증가`}
+                              onClick={() => {
+                                const nextH = roundH(otH + HOURS_STEP);
+                                onChangeOt(r.id, hoursToMd(nextH));
+                              }}
+                            >
+                              +
+                            </Button>
+                          </div>
+                          {otMd > 0 && (
+                            <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                              {formatMd(otMd)}
+                            </div>
+                          )}
+                          </>
                         );
                       })()}
                     </TableCell>
@@ -405,8 +453,9 @@ export default function TimeEntryGrid({
       </Card>
 
       <div className="mt-3 flex items-center justify-between gap-3">
-        <div />
-
+        <p className="text-xs text-muted-foreground">
+          * 8h = 1.0 m/d · 스테퍼 단위: {HOURS_STEP}h · 하루 최대 {MAX_DAILY_HOURS}h · OT 제한 없음
+        </p>
         <div className="flex items-center gap-2">
           <Button
             className="h-10 px-4"
@@ -417,16 +466,7 @@ export default function TimeEntryGrid({
               "저장 중..."
             ) : saveStatus === "success" ? (
               <span className="inline-flex items-center gap-2">
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M4 10l4 4 8-8" />
                 </svg>
                 저장 완료

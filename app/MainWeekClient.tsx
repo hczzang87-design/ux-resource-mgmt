@@ -10,7 +10,12 @@ import { Label } from "@/components/ui/label";
 import TimeEntryGrid from "../features/time-entries/components/TimeEntryGrid";
 import { useDraft } from "../features/time-entries/hooks/useDraft";
 import { makeKey } from "../features/time-entries/lib/key";
-import { mdToHours, formatMd, formatHours } from "../features/time-entries/lib/hours";
+import {
+  mdToHours,
+  hoursToMd,
+  formatMd,
+  MAX_DAILY_HOURS,
+} from "../features/time-entries/lib/hours";
 import type { TimeEntry } from "../features/time-entries/types";
 
 type SavedMember = { member_name: string; mdTotal: number; otTotal: number };
@@ -45,12 +50,9 @@ function parseRowId(rowId: string): { task_name: string; category?: string } {
   return { task_name, category: cat ? cat : undefined };
 }
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
-
-function roundH(n: number) {
-  return Math.round(n * 10) / 10;
+/** m/d 합계 부동소수 오차만 정리 (0.125 단위 유지) */
+function roundMd4(n: number) {
+  return Math.round(n * 10000) / 10000;
 }
 
 export default function MainWeekClient({
@@ -109,12 +111,12 @@ export default function MainWeekClient({
 
     return Array.from(map.values()).map((r) => ({
       ...r,
-      totalMd: round1(r.totalMd),
-      totalOt: round1(r.totalOt),
+      totalMd: roundMd4(r.totalMd),
+      totalOt: roundMd4(r.totalOt),
     }));
   }, [currentEntries]);
 
-  const fmtH = (hours: number) => roundH(hours).toFixed(1);
+  const fmtH = (hours: number) => String(Math.round(hours));
 
   const rows = useMemo(() => {
     if (!activeMember) {
@@ -152,10 +154,12 @@ export default function MainWeekClient({
       const row = byRow.get(rowId)!;
 
       if (e.date && weekDates.includes(e.date)) {
-        row.mdByDate[e.date] = round1((row.mdByDate[e.date] ?? 0) + (e.md ?? 0));
+        row.mdByDate[e.date] = roundMd4(
+          (row.mdByDate[e.date] ?? 0) + (e.md ?? 0)
+        );
       }
 
-      row.ot = round1(row.ot + (e.overtime_md ?? 0));
+      row.ot = roundMd4(row.ot + (e.overtime_md ?? 0));
     }
 
     for (const s of rowSeeds) {
@@ -218,12 +222,15 @@ export default function MainWeekClient({
     );
     const currentCellNum = Number(currentCellEntry?.md ?? 0);
 
-    const maxAllowed = round1(
-      Math.max(0, 1.0 - round1(currentSum - currentCellNum))
+    const remainingMd = Math.max(0, 1.0 - (currentSum - currentCellNum));
+    const maxHours = Math.min(
+      MAX_DAILY_HOURS,
+      Math.floor(mdToHours(remainingMd) + 1e-9)
     );
-    const clamped = round1(Math.max(0, Math.min(nextMd, maxAllowed)));
+    const desiredH = Math.round(mdToHours(nextMd));
+    const clampedH = Math.max(0, Math.min(maxHours, desiredH));
 
-    actions.setMd(key, clamped);
+    actions.setMd(key, hoursToMd(clampedH));
   };
 
   const handleChangeOt = (rowId: string, nextOt: number) => {
@@ -241,7 +248,9 @@ export default function MainWeekClient({
       category: category ?? "",
     });
 
-    actions.setOvertime(key, nextOt);
+    const desiredH = Math.round(mdToHours(nextOt));
+    const clampedH = Math.max(0, desiredH);
+    actions.setOvertime(key, hoursToMd(clampedH));
   };
 
   const handleDeleteRow = (rowId: string) => {
@@ -457,8 +466,8 @@ export default function MainWeekClient({
             ) : (
               <div className="flex flex-wrap gap-2">
                 {savedMembers.map((m) => {
-                  const mdH = roundH(mdToHours(m.mdTotal));
-                  const otH = roundH(mdToHours(m.otTotal));
+                  const mdH = Math.round(mdToHours(m.mdTotal));
+                  const otH = Math.round(mdToHours(m.otTotal));
                   return (
                   <Button
                     key={m.member_name}
@@ -500,12 +509,14 @@ export default function MainWeekClient({
                     </thead>
                     <tbody className="divide-y divide-border">
                       {summaryRows.map((row) => {
-                        const rH = roundH(mdToHours(row.totalMd));
-                        const oH = roundH(mdToHours(row.totalOt));
+                        const rH = Math.round(mdToHours(row.totalMd));
+                        const oH = Math.round(mdToHours(row.totalOt));
                         return (
                         <tr key={`${row.task_name}|||${row.category}`}>
                           <td className="px-4 py-2 text-foreground">{row.task_name}</td>
-                          <td className="px-4 py-2 text-muted-foreground">{row.category || "—"}</td>
+                          <td className="px-4 py-2 text-muted-foreground">
+                            {row.category?.trim() ? row.category : "없음"}
+                          </td>
                           <td className="px-4 py-2 text-right font-medium text-foreground">
                             {fmtH(rH)}h <span className="text-xs text-muted-foreground">({formatMd(row.totalMd)})</span>
                           </td>

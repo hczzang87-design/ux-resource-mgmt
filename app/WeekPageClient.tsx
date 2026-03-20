@@ -14,8 +14,8 @@ type Props = {
   savedEntries: TimeEntry[];
 };
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
+function roundMd4(n: number) {
+  return Math.round(n * 10000) / 10000;
 }
 
 export default function WeekPageClient({
@@ -33,8 +33,8 @@ export default function WeekPageClient({
       const name = e.member_name ?? "";
       if (!name) continue;
       const cur = byMember.get(name) ?? { mdTotal: 0, otTotal: 0 };
-      cur.mdTotal = round1(cur.mdTotal + Number(e.md ?? 0));
-      cur.otTotal = round1(cur.otTotal + Number(e.overtime_md ?? 0));
+      cur.mdTotal = roundMd4(cur.mdTotal + Number(e.md ?? 0));
+      cur.otTotal = roundMd4(cur.otTotal + Number(e.overtime_md ?? 0));
       byMember.set(name, cur);
     }
     return Array.from(byMember.entries()).map(([member_name, t]) => ({

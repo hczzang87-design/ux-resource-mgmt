@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +20,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { mdToHours, formatMd } from "@/features/time-entries/lib/hours";
+
+import { MonthDashboardCharts } from "./MonthDashboardCharts";
+import { computeMonthDashboardDerived } from "./_monthDashboardDerived";
 
 type MonthSummaryResponse = {
   range: {
@@ -131,14 +135,19 @@ export default async function MonthPage({
   const totalHours = roundH(mdToHours(data.totals.md));
   const totalOtHours = roundH(mdToHours(data.totals.ot));
 
+  const dashboardDerived =
+    data.members.length > 0 ? computeMonthDashboardDerived(data) : null;
+
   return (
-    <div className="page-container">
+    <div className="page-container-month">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
         <Button asChild variant="outline">
           <Link href={weekBackHref}>← 주간 입력으로</Link>
         </Button>
-        <h1 className="text-lg font-semibold text-foreground">월간 내역 보기</h1>
+        <h1 className="text-lg font-semibold text-foreground">
+          월간 인사이트 대시보드
+        </h1>
         <div className="w-[110px]" />
       </div>
 
@@ -167,27 +176,103 @@ export default async function MonthPage({
         </CardContent>
       </Card>
 
-      {/* Summary */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+      {/* KPI */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">총 시간 / MD</CardTitle>
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              총 투입 시간
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold tabular-nums">{fmtH(totalHours)}h</div>
-            <div className="mt-1 text-sm text-muted-foreground">{formatMd(data.totals.md)}</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {fmtH(totalHours)}h
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {formatMd(data.totals.md)}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-normal text-muted-foreground">총 OT 시간</CardTitle>
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              총 OT 시간
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold tabular-nums">{fmtH(totalOtHours)}h</div>
-            <div className="mt-1 text-sm text-muted-foreground">{formatMd(data.totals.ot)}</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {fmtH(totalOtHours)}h
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {formatMd(data.totals.ot)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              투입 인원
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">
+              {data.members.length}
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">명</div>
           </CardContent>
         </Card>
       </div>
+
+      {/* 핵심 인사이트 */}
+      {dashboardDerived && dashboardDerived.insights.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground">
+            핵심 인사이트
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {dashboardDerived.insights.map((insight) => (
+              <Card key={insight.key}>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-base">{insight.title}</CardTitle>
+                    <Badge
+                      variant={
+                        insight.id === "overtime-load"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                      className="text-[10px] font-medium uppercase tracking-wide"
+                    >
+                      {insight.id === "resource-skew"
+                        ? "편중"
+                        : insight.id === "overtime-load"
+                          ? "OT"
+                          : "집중"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <CardDescription className="text-sm leading-relaxed">
+                    {insight.description}
+                  </CardDescription>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* 차트 */}
+      {dashboardDerived ? (
+        <div className="mb-10">
+          <MonthDashboardCharts
+            chartCaptions={dashboardDerived.chartCaptions}
+            categoryDonut={dashboardDerived.categoryDonut}
+            memberBars={dashboardDerived.memberBars}
+            taskBars={dashboardDerived.taskBars}
+          />
+        </div>
+      ) : null}
 
       {/* Members */}
       {data.members.length === 0 ? (
@@ -198,13 +283,16 @@ export default async function MonthPage({
         </Card>
       ) : (
         <div className="space-y-4">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
+            인원별 상세
+          </h2>
           {data.members.map((m) => {
             const mHours = roundH(mdToHours(m.totals.md));
             const mOtHours = roundH(mdToHours(m.totals.ot));
             return (
             <Card key={m.member_name} className="group">
               <details open>
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="truncate text-base font-semibold text-foreground">
                       {m.member_name}
@@ -238,7 +326,7 @@ export default async function MonthPage({
                     </svg>
                   </span>
                 </summary>
-                <div className="border-t border-border">
+                <div className="border-t border-border px-4 pb-5 pt-2 sm:px-6">
                   <Table className="table-fixed">
                     <TableHeader>
                       <TableRow>

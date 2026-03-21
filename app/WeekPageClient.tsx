@@ -64,6 +64,15 @@ export default function WeekPageClient({
     router.push(`/?from=${from}&to=${to}`);
   };
 
+  /** 시스템(클라이언트) 오늘 날짜 기준 해당 주 월~금으로 이동 */
+  const onThisWeek = () => {
+    const monday = startOfWeekMonday(new Date());
+    const from = toYMD(monday);
+    const friday = addDays(monday, 4);
+    const to = toYMD(friday);
+    router.push(`/?from=${from}&to=${to}`);
+  };
+
   const onSaveWeek = async (memberName: string, entries: TimeEntry[]) => {
     const from = weekDates[0];
     const to = weekDates[weekDates.length - 1];
@@ -94,6 +103,7 @@ export default function WeekPageClient({
       weekRangeLabel={weekRangeLabel}
       monthHref={monthHref}
       onPrevWeek={onPrevWeek}
+      onThisWeek={onThisWeek}
       onNextWeek={onNextWeek}
       savedEntries={savedEntries}
       onSaveWeek={onSaveWeek}
@@ -113,4 +123,14 @@ function addDays(d: Date, n: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
   return x;
+}
+
+/** app/page.tsx `startOfWeekMonday` 와 동일 (월~금 주차 기준) */
+function startOfWeekMonday(today: Date) {
+  const d = new Date(today);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }

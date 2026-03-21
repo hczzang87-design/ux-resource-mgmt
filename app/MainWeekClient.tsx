@@ -25,6 +25,7 @@ type Props = {
   weekRangeLabel: string;
   monthHref: string;
   onPrevWeek: () => void;
+  onThisWeek: () => void;
   onNextWeek: () => void;
   savedEntries: TimeEntry[];
   onSaveWeek: (memberName: string, entries: TimeEntry[]) => Promise<void>;
@@ -60,6 +61,7 @@ export default function MainWeekClient({
   weekRangeLabel,
   monthHref,
   onPrevWeek,
+  onThisWeek,
   onNextWeek,
   savedEntries,
   onSaveWeek,
@@ -338,29 +340,51 @@ export default function MainWeekClient({
 
         {/* Header */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
                 UX Resource Management
               </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                시간(h) 기준 입력 · 8h = 1.0 m/d · 주간은 월~금 워킹데이
-              </p>
             </div>
 
-            <Button asChild size="default" className="shrink-0">
-              <Link href={monthHref}>월간 내역 보기</Link>
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-            <Button variant="outline" onClick={onPrevWeek}>
-              ← 이전 주
-            </Button>
-            <span className="text-sm font-medium text-foreground">{weekRangeLabel}</span>
-            <Button variant="outline" onClick={onNextWeek}>
-              다음 주 →
-            </Button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <Button asChild size="default" className="w-full shrink-0 sm:w-auto">
+                <Link href={monthHref}>월간 내역 보기</Link>
+              </Button>
+              <span className="text-center mt-3 text-base font-medium tabular-nums text-foreground sm:text-right">
+                {weekRangeLabel}
+              </span>
+              <div className="flex items-center justify-center gap-1 sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={onPrevWeek}
+                  aria-label="이전 주"
+                >
+                  ←
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-w-[4.5rem] shrink-0"
+                  onClick={onThisWeek}
+                >
+                  이번주
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={onNextWeek}
+                  aria-label="다음 주"
+                >
+                  →
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -417,11 +441,15 @@ export default function MainWeekClient({
                     <ul className="flex flex-col gap-1">
                       <li className="flex gap-1">
                         <span className="w-3 shrink-0">*</span>
-                        <span className="flex-1">시간(h)으로 입력, 8h = 1.0 m/d 기준 자동 환산.</span>
+                        <span className="flex-1">시간(h)으로 입력 · 스테퍼 단위: 1h</span>
                       </li>
                       <li className="flex gap-1">
                         <span className="w-3 shrink-0">*</span>
-                        <span className="flex-1">하루 최대 8h (= 1.0 m/d). 초과(OT)는 제한 없음.</span>
+                        <span className="flex-1">8h = 1.0 m/d · 하루 최대 8h</span>
+                      </li>
+                      <li className="flex gap-1">
+                        <span className="w-3 shrink-0">*</span>
+                        <span className="flex-1">초과근무(OT)는 제한 없음</span>
                       </li>
                     </ul>
                   </div>

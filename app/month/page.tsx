@@ -243,11 +243,13 @@ export default async function MonthPage({
                       }
                       className="text-[10px] font-medium uppercase tracking-wide"
                     >
-                      {insight.id === "resource-skew"
-                        ? "편중"
-                        : insight.id === "overtime-load"
-                          ? "OT"
-                          : "집중"}
+                      {insight.id === "resource-external"
+                        ? "외부"
+                        : insight.id === "resource-misc"
+                          ? "기타"
+                          : insight.id === "overtime-load"
+                            ? "OT"
+                            : "집중"}
                     </Badge>
                   </div>
                 </CardHeader>

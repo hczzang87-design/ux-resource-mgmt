@@ -18,7 +18,11 @@ export type MonthSummaryLike = {
 };
 
 export type MonthInsightItem = {
-  id: "resource-skew" | "overtime-load" | "task-focus";
+  id:
+    | "resource-external"
+    | "resource-misc"
+    | "overtime-load"
+    | "task-focus";
   /** 리스트 렌더 시 카드별 고유 키 (동일 id 중복 방지) */
   key: string;
   title: string;
@@ -58,6 +62,12 @@ function pctWhole(share: number) {
 }
 
 const EXCLUDED_MISC = "기타";
+
+/** 핵심 인사이트: 해당 카테고리가 전체 MD의 이 비율 이상이면 표시 */
+const CATEGORY_ALERT_THRESHOLD = 0.15;
+/** API/입력에서 쓰는 카테고리명과 정확히 일치해야 함 */
+const CATEGORY_EXTERNAL_REQUEST = "외부 리퀘스트";
+const CATEGORY_MISC_INSIGHT = "기타";
 
 /** 업무 집중도: 카테고리 또는 업무명이 「기타」인 행은 제외 */
 function excludeFromTaskFocus(category: string, taskName: string) {
@@ -109,16 +119,33 @@ export function computeMonthDashboardDerived(
   const insights: MonthInsightItem[] = [];
   const totalHoursAll = roundDisplayHours(mdToHours(totalMdSum));
 
-  /* --- 카테고리 편중: MD 기준 최대 카테고리, 50% 이상 --- */
-  const topCat = topCategoryByMd(catMap, totalMdSum);
-  if (topCat && topCat.share >= 0.5) {
-    const p = pctWhole(topCat.share);
-    insights.push({
-      id: "resource-skew",
-      key: "resource-skew",
-      title: "리소스 편중",
-      description: `「${topCat.name}」 ${p}%·${topCat.hours}h (전체 ${totalHoursAll}h 중 최대 비중)`,
-    });
+  /* --- 외부 리퀘스트 / 기타: 각각 전체 투입(MD)의 15% 이상일 때만 인사이트 --- */
+  if (totalMdSum > 0) {
+    const extMd = catMap.get(CATEGORY_EXTERNAL_REQUEST) ?? 0;
+    const extShare = extMd / totalMdSum;
+    if (extShare >= CATEGORY_ALERT_THRESHOLD) {
+      const p = pctWhole(extShare);
+      const h = roundDisplayHours(mdToHours(extMd));
+      insights.push({
+        id: "resource-external",
+        key: "resource-external",
+        title: "외부 리퀘스트 비중",
+        description: `「${CATEGORY_EXTERNAL_REQUEST}」 ${p}%·${h}h (전체 ${totalHoursAll}h 중, 15% 기준 이상)`,
+      });
+    }
+
+    const miscMd = catMap.get(CATEGORY_MISC_INSIGHT) ?? 0;
+    const miscShare = miscMd / totalMdSum;
+    if (miscShare >= CATEGORY_ALERT_THRESHOLD) {
+      const p = pctWhole(miscShare);
+      const h = roundDisplayHours(mdToHours(miscMd));
+      insights.push({
+        id: "resource-misc",
+        key: "resource-misc",
+        title: "기타 업무 비중",
+        description: `「${CATEGORY_MISC_INSIGHT}」 ${p}%·${h}h (전체 ${totalHoursAll}h 중, 15% 기준 이상)`,
+      });
+    }
   }
 
   /* --- OT: 0 초과, 숫자·대상 포함 --- */

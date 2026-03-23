@@ -14,8 +14,8 @@ type Props = {
   savedEntries: TimeEntry[];
 };
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
+function roundMd4(n: number) {
+  return Math.round(n * 10000) / 10000;
 }
 
 export default function WeekPageClient({
@@ -33,8 +33,8 @@ export default function WeekPageClient({
       const name = e.member_name ?? "";
       if (!name) continue;
       const cur = byMember.get(name) ?? { mdTotal: 0, otTotal: 0 };
-      cur.mdTotal = round1(cur.mdTotal + Number(e.md ?? 0));
-      cur.otTotal = round1(cur.otTotal + Number(e.overtime_md ?? 0));
+      cur.mdTotal = roundMd4(cur.mdTotal + Number(e.md ?? 0));
+      cur.otTotal = roundMd4(cur.otTotal + Number(e.overtime_md ?? 0));
       byMember.set(name, cur);
     }
     return Array.from(byMember.entries()).map(([member_name, t]) => ({
@@ -58,6 +58,15 @@ export default function WeekPageClient({
     const [y, m, d] = weekDates[0].split("-").map(Number);
     const monday = new Date(y, m - 1, d);
     monday.setDate(monday.getDate() + 7);
+    const from = toYMD(monday);
+    const friday = addDays(monday, 4);
+    const to = toYMD(friday);
+    router.push(`/?from=${from}&to=${to}`);
+  };
+
+  /** 시스템(클라이언트) 오늘 날짜 기준 해당 주 월~금으로 이동 */
+  const onThisWeek = () => {
+    const monday = startOfWeekMonday(new Date());
     const from = toYMD(monday);
     const friday = addDays(monday, 4);
     const to = toYMD(friday);
@@ -94,6 +103,7 @@ export default function WeekPageClient({
       weekRangeLabel={weekRangeLabel}
       monthHref={monthHref}
       onPrevWeek={onPrevWeek}
+      onThisWeek={onThisWeek}
       onNextWeek={onNextWeek}
       savedEntries={savedEntries}
       onSaveWeek={onSaveWeek}
@@ -113,4 +123,14 @@ function addDays(d: Date, n: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
   return x;
+}
+
+/** app/page.tsx `startOfWeekMonday` 와 동일 (월~금 주차 기준) */
+function startOfWeekMonday(today: Date) {
+  const d = new Date(today);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }

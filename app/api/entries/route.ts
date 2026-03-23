@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
+type IncomingEntryRow = {
+  date?: unknown;
+  category?: unknown;
+  task_name?: unknown;
+  md?: unknown;
+  overtime_md?: unknown;
+};
+
 export async function GET(req: Request) {
   const supabase = supabaseServer();
 
@@ -39,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "member_name required" }, { status: 400 });
   }
 
-  const entries = body.entries.map((x: any) => ({
+  const entries = (body.entries as IncomingEntryRow[]).map((x) => ({
     member_name,
     date: x.date,
     category: x.category,

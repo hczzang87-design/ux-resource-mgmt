@@ -2,6 +2,28 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { mdToHours, formatMd } from "@/features/time-entries/lib/hours";
+
+import { MonthDashboardCharts } from "./MonthDashboardCharts";
+import { computeMonthDashboardDerived } from "./_monthDashboardDerived";
+
 type MonthSummaryResponse = {
   range: {
     year: number;
@@ -33,11 +55,9 @@ function monthLabel(year: number, month: number) {
 }
 
 async function getBaseUrlFromRequest() {
-  // 1) env 우선
   const envBase = process.env.NEXT_PUBLIC_BASE_URL;
   if (envBase) return envBase.replace(/\/+$/, "");
 
-  // 2) env 없으면 요청 헤더로 구성
   const h = await headers();
   const host = h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "http";
@@ -56,6 +76,14 @@ async function fetchMonth(year: number, month: number) {
     throw new Error(`Failed to load month summary: ${res.status} ${txt}`);
   }
   return (await res.json()) as MonthSummaryResponse;
+}
+
+function roundH(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+function fmtH(hours: number) {
+  return roundH(hours).toFixed(1);
 }
 
 export default async function MonthPage({
@@ -84,7 +112,7 @@ export default async function MonthPage({
   }
   function startOfWeekMonday(date: Date) {
     const d = new Date(date);
-    const day = d.getDay(); // 0(일)~6(토)
+    const day = d.getDay();
     const diff = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diff);
     d.setHours(0, 0, 0, 0);
@@ -96,7 +124,6 @@ export default async function MonthPage({
     return x;
   }
 
-  // 선택 월의 "1일"을 기준으로 그 주의 월요일~금요일 계산
   const firstDay = new Date(year, month - 1, 1);
   const monday = startOfWeekMonday(firstDay);
   const friday = addDays(monday, 4);
@@ -105,156 +132,247 @@ export default async function MonthPage({
 
   const data = await fetchMonth(year, month);
 
-  const fmt1 = (n: number) => Number(n ?? 0).toFixed(1);
+  const totalHours = roundH(mdToHours(data.totals.md));
+  const totalOtHours = roundH(mdToHours(data.totals.ot));
+
+  const dashboardDerived =
+    data.members.length > 0 ? computeMonthDashboardDerived(data) : null;
 
   return (
-    <div className="page-container">
+    <div className="page-container-month">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
-        <Link
-          href={weekBackHref}
-          className="ui-btn"
-        >
-          ← 주간 입력으로
-        </Link>
-        <h1 className="text-lg font-semibold">월간 내역 보기</h1>
+        <Button asChild variant="outline">
+          <Link href={weekBackHref}>← 주간 입력으로</Link>
+        </Button>
+        <h1 className="text-lg font-semibold text-foreground">
+          월간 인사이트 대시보드
+        </h1>
         <div className="w-[110px]" />
       </div>
 
-      {/* Month selector (A안) */}
-      <div className="ui-card ui-card-pad mb-6">
-        <div className="text-sm text-zinc-600">월</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {Array.from({ length: 12 }).map((_, i) => {
-            const m = i + 1;
-            const active = m === month;
-            return (
-              <Link
-                key={m}
-                href={`/month?year=${year}&month=${m}`}
-                className={[
-                  "ui-btn",
-                  active
-                    ? "bg-zinc-900 text-white border-zinc-900"
-                    : "hover:bg-zinc-50",
-                ].join(" ")}
-              >
-                {m}월
-              </Link>
-            );
-          })}
-        </div>
+      {/* Month selector */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm text-muted-foreground">월</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 12 }).map((_, i) => {
+              const m = i + 1;
+              const active = m === month;
+              return (
+                <Button key={m} variant={active ? "default" : "outline"} size="sm" asChild>
+                  <Link href={`/month?year=${year}&month=${m}`}>
+                    {m}월
+                  </Link>
+                </Button>
+              );
+            })}
+          </div>
+          <CardDescription className="mt-3 text-xs">
+            범위: {data.range.start} ~ {data.range.end} ({data.range.daysInMonth}일)
+          </CardDescription>
+        </CardContent>
+      </Card>
 
-        <div className="mt-3 text-xs text-zinc-500">
-          범위: {data.range.start} ~ {data.range.end} ({data.range.daysInMonth}일)
-        </div>
+      {/* KPI */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              총 투입 시간
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">
+              {fmtH(totalHours)}h
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {formatMd(data.totals.md)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              총 OT 시간
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">
+              {fmtH(totalOtHours)}h
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {formatMd(data.totals.ot)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              투입 인원
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold tabular-nums">
+              {data.members.length}
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">명</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Summary */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <div className="ui-card ui-card-pad">
-          <div className="text-sm text-zinc-600">총 MD</div>
-          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.md)}</div>
+      {/* 핵심 인사이트 */}
+      {dashboardDerived && dashboardDerived.insights.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground">
+            핵심 인사이트
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {dashboardDerived.insights.map((insight) => (
+              <Card key={insight.key}>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-base">{insight.title}</CardTitle>
+                    <Badge
+                      variant={
+                        insight.id === "overtime-load"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                      className="text-[10px] font-medium uppercase tracking-wide"
+                    >
+                      {insight.id === "resource-external"
+                        ? "외부"
+                        : insight.id === "resource-misc"
+                          ? "기타"
+                          : insight.id === "overtime-load"
+                            ? "OT"
+                            : "집중"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <CardDescription className="text-sm leading-relaxed">
+                    {insight.description}
+                  </CardDescription>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* 차트 */}
+      {dashboardDerived ? (
+        <div className="mb-10">
+          <MonthDashboardCharts
+            chartCaptions={dashboardDerived.chartCaptions}
+            categoryDonut={dashboardDerived.categoryDonut}
+            memberBars={dashboardDerived.memberBars}
+            taskBars={dashboardDerived.taskBars}
+          />
         </div>
-        <div className="ui-card ui-card-pad">
-          <div className="text-sm text-zinc-600">총 OT</div>
-          <div className="mt-1 text-2xl font-semibold">{fmt1(data.totals.ot)}</div>
-        </div>
-      </div>
+      ) : null}
 
       {/* Members */}
       {data.members.length === 0 ? (
-        <div className="ui-card p-10 text-center text-zinc-600">
-          {monthLabel(year, month)}에 저장된 데이터가 없어요.
-        </div>
+        <Card>
+          <CardContent className="p-10 text-center text-muted-foreground">
+            {monthLabel(year, month)}에 저장된 데이터가 없어요.
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {data.members.map((m) => (
-  <details
-    key={m.member_name}
-    className="ui-card group"
-    open
-  >
-    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 hover:bg-zinc-50">
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="truncate text-base font-semibold">{m.member_name}</div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
-            <span className="text-zinc-500">MD</span>
-            <span className="font-semibold tabular-nums">{fmt1(m.totals.md)}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700">
-            <span className="text-zinc-500">OT</span>
-            <span className="font-semibold tabular-nums">{fmt1(m.totals.ot)}</span>
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 text-sm text-zinc-700">
-        <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-          <span className="hidden sm:inline">상세</span>
-          <svg
-            className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M6 8l4 4 4-4" />
-          </svg>
-        </span>
-      </div>
-    </summary>
-
-    {/* divider */}
-    <div className="border-t border-zinc-100" />
-
-    <div className="overflow-x-auto">
-      <div className="overflow-hidden">
-      <table className="ui-table table-fixed">
-        <colgroup>
-          <col />
-          <col className="w-[96px]" />
-          <col className="w-[96px]" />
-        </colgroup>
-        <thead className="ui-thead">
-          <tr>
-            <th className="ui-th">업무명</th>
-            <th className="ui-th text-right">MD</th>
-            <th className="ui-th text-right">OT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {m.tasks.map((t, idx) => (
-            <tr
-              key={`${t.category}||${t.task_name}||${idx}`}
-              className="border-t border-zinc-100"
-            >
-              <td className="ui-td">
-                <div className="flex flex-col gap-1">
-                  <div className="truncate font-medium" title={t.task_name}>
-                    {t.task_name}
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
+            인원별 상세
+          </h2>
+          {data.members.map((m) => {
+            const mHours = roundH(mdToHours(m.totals.md));
+            const mOtHours = roundH(mdToHours(m.totals.ot));
+            return (
+            <Card key={m.member_name} className="group">
+              <details open>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-base font-semibold text-foreground">
+                      {m.member_name}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
+                        <span className="text-muted-foreground">시간</span>
+                        <span className="font-semibold tabular-nums">{fmtH(mHours)}h</span>
+                        <span className="text-muted-foreground text-[10px]">({formatMd(m.totals.md)})</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground">
+                        <span className="text-muted-foreground">OT</span>
+                        <span className="font-semibold tabular-nums">{fmtH(mOtHours)}h</span>
+                        <span className="text-muted-foreground text-[10px]">({formatMd(m.totals.ot)})</span>
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-zinc-500">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5">
-                      {t.category}
-                    </span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                    <span className="hidden sm:inline">상세</span>
+                    <svg
+                      className="h-4 w-4 transition-transform group-open:rotate-180"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 8l4 4 4-4" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="border-t border-border px-4 pb-5 pt-2 sm:px-6">
+                  <Table className="table-fixed">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>업무명</TableHead>
+                        <TableHead className="w-[140px] text-right">시간 (m/d)</TableHead>
+                        <TableHead className="w-[140px] text-right">OT 시간 (m/d)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {m.tasks.map((t, idx) => {
+                        const tH = roundH(mdToHours(t.md));
+                        const tOtH = roundH(mdToHours(t.ot));
+                        return (
+                        <TableRow key={`${t.category}||${t.task_name}||${idx}`}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <div className="truncate font-medium" title={t.task_name}>
+                                {t.task_name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="rounded-full bg-muted px-2 py-0.5">
+                                  {t.category}
+                                </span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="font-medium">{fmtH(tH)}h</span>
+                            <span className="ml-1 text-xs text-muted-foreground">({formatMd(t.md)})</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="font-medium">{fmtH(tOtH)}h</span>
+                            <span className="ml-1 text-xs text-muted-foreground">({formatMd(t.ot)})</span>
+                          </TableCell>
+                        </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
-              </td>
-              <td className="ui-td text-right tabular-nums">{fmt1(t.md)}</td>
-              <td className="ui-td text-right tabular-nums">{fmt1(t.ot)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-    </div>
-  </details>
-))}
+              </details>
+            </Card>
+            );
+          })}
         </div>
       )}
     </div>

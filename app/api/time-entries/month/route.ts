@@ -164,11 +164,9 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json(out);
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("MONTH API ERROR:", e);
-    return NextResponse.json(
-      { error: e?.message || "Unknown error" },
-      { status: 500 }
-    );
+    const message = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -4,12 +4,16 @@ import { useMemo, useState } from "react";
 import type { DraftStats, EntryKey, TimeEntry, ValidationError } from "../types";
 import { makeKey, parseKey } from "../lib/key";
 import { validateDailyLimit } from "../lib/validate";
+import { snapDailyMdToIntegerHours, snapOtMdToIntegerHours } from "../lib/hours";
 
 type UseDraftArg = TimeEntry[] | { baseEntries?: TimeEntry[] } | undefined | null;
 
 function normalizeBaseEntries(arg: UseDraftArg): TimeEntry[] {
   if (Array.isArray(arg)) return arg;
-  if (arg && Array.isArray((arg as any).baseEntries)) return (arg as any).baseEntries;
+  if (arg && typeof arg === "object" && "baseEntries" in arg) {
+    const o = arg as { baseEntries?: TimeEntry[] };
+    if (Array.isArray(o.baseEntries)) return o.baseEntries;
+  }
   return [];
 }
 
@@ -21,10 +25,6 @@ function clamp01(n: number) {
   if (Number.isNaN(n)) return 0;
   return Math.max(0, Math.min(1, n));
 }
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
-
 export function useDraft(arg: UseDraftArg) {
   const baseEntries = normalizeBaseEntries(arg);
 
@@ -102,7 +102,7 @@ export function useDraft(arg: UseDraftArg) {
           date,
           category: category || "기타",
           task_name,
-          md: round1(clamp01(md)),
+          md: snapDailyMdToIntegerHours(clamp01(md)),
           overtime_md: Number(base?.overtime_md ?? 0),
         };
 
@@ -125,7 +125,7 @@ export function useDraft(arg: UseDraftArg) {
           category: category || "기타",
           task_name,
           md: Number(base?.md ?? 0),
-          overtime_md: Math.max(0, round1(Number(overtime_md ?? 0))),
+          overtime_md: snapOtMdToIntegerHours(Number(overtime_md ?? 0)),
         };
 
         setPatches((prev) => {

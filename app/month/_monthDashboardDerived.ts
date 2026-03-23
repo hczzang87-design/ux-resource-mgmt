@@ -17,6 +17,31 @@ export type MonthSummaryLike = {
   }>;
 };
 
+/** 카드 본문 강조 UI용 (직렬화 가능한 데이터만) */
+export type MonthInsightRichBody =
+  | {
+      variant: "category";
+      quote: string;
+      percent: number;
+      hours: number;
+    }
+  | {
+      variant: "ot_multi";
+      count: number;
+    }
+  | {
+      variant: "ot_single";
+      name: string;
+      hours: number;
+    }
+  | {
+      variant: "task_focus";
+      name1: string;
+      name2: string;
+      top2h: number;
+      percent: number;
+    };
+
 export type MonthInsightItem = {
   id:
     | "resource-external"
@@ -26,7 +51,9 @@ export type MonthInsightItem = {
   /** 리스트 렌더 시 카드별 고유 키 (동일 id 중복 방지) */
   key: string;
   title: string;
+  /** 접근성·폴백용 한 줄 요약 */
   description: string;
+  richBody: MonthInsightRichBody;
 };
 
 export type CategoryDonutDatum = { name: string; value: number };
@@ -117,7 +144,6 @@ export function computeMonthDashboardDerived(
   }
 
   const insights: MonthInsightItem[] = [];
-  const totalHoursAll = roundDisplayHours(mdToHours(totalMdSum));
 
   /* --- 외부 리퀘스트 / 기타: 각각 전체 투입(MD)의 15% 이상일 때만 인사이트 --- */
   if (totalMdSum > 0) {
@@ -129,8 +155,14 @@ export function computeMonthDashboardDerived(
       insights.push({
         id: "resource-external",
         key: "resource-external",
-        title: "외부 리퀘스트 비중",
-        description: `「${CATEGORY_EXTERNAL_REQUEST}」 ${p}%·${h}h (전체 ${totalHoursAll}h 중, 15% 기준 이상)`,
+        title: "외부 리퀘스트 비중 높음",
+        description: `「${CATEGORY_EXTERNAL_REQUEST}」 ${p}% (${h}h)`,
+        richBody: {
+          variant: "category",
+          quote: CATEGORY_EXTERNAL_REQUEST,
+          percent: p,
+          hours: h,
+        },
       });
     }
 
@@ -142,8 +174,14 @@ export function computeMonthDashboardDerived(
       insights.push({
         id: "resource-misc",
         key: "resource-misc",
-        title: "기타 업무 비중",
-        description: `「${CATEGORY_MISC_INSIGHT}」 ${p}%·${h}h (전체 ${totalHoursAll}h 중, 15% 기준 이상)`,
+        title: "기타 업무 비중 높음",
+        description: `「${CATEGORY_MISC_INSIGHT}」 ${p}% (${h}h)`,
+        richBody: {
+          variant: "category",
+          quote: CATEGORY_MISC_INSIGHT,
+          percent: p,
+          hours: h,
+        },
       });
     }
   }
@@ -158,13 +196,15 @@ export function computeMonthDashboardDerived(
     .sort((a, b) => b.otHours - a.otHours || a.name.localeCompare(b.name, "ko"));
 
   if (otMembers.length >= 2) {
-    const max = otMembers[0]!;
-    const maxH = roundDisplayHours(max.otHours);
     insights.push({
       id: "overtime-load",
       key: "overtime-load",
       title: "인원 부하 · OT",
-      description: `${otMembers.length}명 OT 발생 (${max.name} ${maxH}h 최다)`,
+      description: `${otMembers.length}명 OT 발생`,
+      richBody: {
+        variant: "ot_multi",
+        count: otMembers.length,
+      },
     });
   } else if (otMembers.length === 1) {
     const only = otMembers[0]!;
@@ -173,7 +213,12 @@ export function computeMonthDashboardDerived(
       id: "overtime-load",
       key: "overtime-load",
       title: "인원 부하 · OT",
-      description: `1명 OT 발생 (${only.name} ${h}h)`,
+      description: `1명 OT 발생 · ${only.name} ${h}h`,
+      richBody: {
+        variant: "ot_single",
+        name: only.name,
+        hours: h,
+      },
     });
   }
 
@@ -195,14 +240,19 @@ export function computeMonthDashboardDerived(
       const ratio2 = top2sum / totalTaskMdExcluded;
       if (ratio2 >= 0.7) {
         const p = pctWhole(ratio2);
-        const h1 = roundDisplayHours(mdToHours(m1));
-        const h2 = roundDisplayHours(mdToHours(m2));
         const top2h = roundDisplayHours(mdToHours(top2sum));
         insights.push({
           id: "task-focus",
           key: "task-focus",
           title: "업무 집중도 높음",
-          description: `「${n1}」·「${n2}」 2개 업무 ${p}%·${top2h}h (기타 제외 ${totalTaskHExcluded}h 중 상위 2개)`,
+          description: `「${n1}」·「${n2}」 2개 업무 ${p}% (${top2h}h)`,
+          richBody: {
+            variant: "task_focus",
+            name1: n1,
+            name2: n2,
+            top2h,
+            percent: p,
+          },
         });
       }
     }

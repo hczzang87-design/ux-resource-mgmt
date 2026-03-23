@@ -22,6 +22,7 @@ import {
 import { mdToHours, formatMd } from "@/features/time-entries/lib/hours";
 
 import { MonthDashboardCharts } from "./MonthDashboardCharts";
+import { MonthInsightCardBody } from "./MonthInsightCardBody";
 import { computeMonthDashboardDerived } from "./_monthDashboardDerived";
 
 type MonthSummaryResponse = {
@@ -254,9 +255,10 @@ export default async function MonthPage({
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <CardDescription className="text-sm leading-relaxed">
-                    {insight.description}
-                  </CardDescription>
+                  <span className="sr-only">{insight.description}</span>
+                  <div className="text-sm leading-relaxed text-muted-foreground">
+                    <MonthInsightCardBody body={insight.richBody} />
+                  </div>
                 </CardContent>
               </Card>
             ))}

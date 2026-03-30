@@ -45,8 +45,8 @@ type Props = {
 };
 
 const CATEGORY_OPTIONS = [
-  { label: "프로덕트 디자인", value: "프로덕트 디자인" },
-  { label: "외부 리퀘스트", value: "외부 리퀘스트" },
+  { label: "프로덕트 UX", value: "프로덕트 UX" },
+  { label: "UX 리퀘스트", value: "UX 리퀘스트" },
   { label: "기타", value: "기타" },
 ];
 
@@ -195,21 +195,28 @@ export default function TimeEntryGrid({
               <TableHead className="w-[128px] whitespace-nowrap px-4 py-3">카테고리</TableHead>
               <TableHead className="w-[110px] px-4 py-3">
                 <div className="flex flex-col leading-tight">
-                  <span>총 시간</span>
-                  <span className="text-[10px] text-muted-foreground">h / m/d</span>
+                  <span>투입 시간</span>
                 </div>
               </TableHead>
-              {headerDates.map((d) => (
-                <TableHead
-                  key={d.iso}
-                  className="w-[110px] min-w-[110px] px-2 py-3 text-center whitespace-nowrap text-xs"
-                >
-                  <div className="flex flex-col leading-tight">
-                    <span>{d.mmdd} ({d.dow})</span>
-                    <span className="text-[10px] text-muted-foreground">시간(h)</span>
-                  </div>
-                </TableHead>
-              ))}
+              {headerDates.map((d) => {
+                const dayMd = dateTotalsMd[d.iso] ?? 0;
+                const dayH = intH(mdToHours(dayMd));
+                return (
+                  <TableHead
+                    key={d.iso}
+                    className="w-[110px] min-w-[110px] px-2 py-3 text-center whitespace-nowrap text-xs"
+                  >
+                    <div className="flex flex-col items-center gap-0.5 leading-tight">
+                      <span>
+                        {d.mmdd} ({d.dow})
+                      </span>
+                      <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+                        {dayH}/{MAX_DAILY_HOURS}
+                      </span>
+                    </div>
+                  </TableHead>
+                );
+              })}
               <TableHead className="w-[120px] px-4 py-3">
                 <div className="flex flex-col leading-tight">
                   <span>초과 근무</span>
